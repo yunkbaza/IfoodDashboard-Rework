@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+/* Sintaxe atualizada oficial do Tailwind v4 para o Dark Mode */
+@variant dark (&:where(.dark, .dark *));
+
+body {
+  @apply antialiased transition-colors duration-300;
+}
