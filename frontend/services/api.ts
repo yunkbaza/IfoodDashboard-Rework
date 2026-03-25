@@ -108,3 +108,21 @@ export async function getAnaliseIA(feedbacks: any[]) {
   if (!res.ok) throw new Error('Falha ao conectar com a IA');
   return res.json();
 }
+
+// Adicione ao final do arquivo frontend/services/api.ts
+
+export async function getAvaliacoes() {
+  const res = await fetch(`${API_URL}/avaliacoes`);
+  if (!res.ok) throw new Error('Falha ao buscar avaliações');
+  return res.json();
+}
+
+export async function createAvaliacao(dados: { cliente: string; nota: number; texto: string; sentimento: string }) {
+  const res = await fetch(`${API_URL}/avaliacoes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dados),
+  });
+  if (!res.ok) throw new Error('Falha ao criar avaliação');
+  return res.json();
+}

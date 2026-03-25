@@ -1,25 +1,31 @@
+import os
+import json
+import requests
+import re
+from datetime import datetime, timedelta
+from typing import List
+
 from fastapi import FastAPI, Depends, Query, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import text, func, cast, Date, desc
-from datetime import datetime, timedelta
+from sqlalchemy import func, cast, Date, desc
 from pydantic import BaseModel
 import uvicorn
-import json
-import requests 
-import re 
+from dotenv import load_dotenv
 
 from app.core.database import get_db, engine
-from app.models.pedido import Pedido, ItemPedido, Usuario, Base 
+from app.models.pedido import Pedido, ItemPedido, Usuario, Avaliacao, Base 
 from app.schemas.pedido import PedidoSchema
-
 from app.core.auth import verificar_senha, obter_hash_senha, criar_token_acesso, ACCESS_TOKEN_EXPIRE_MINUTES
+
+# Carrega variáveis do arquivo .env
+load_dotenv()
 
 # Inicialização automática do Banco de Dados
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="iFood Dashboard Pro API", version="2.0.0")
+app = FastAPI(title="iFood Dashboard Pro API", version="2.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,7 +40,13 @@ class StatusUpdate(BaseModel):
     status: str
 
 class FeedbackRequest(BaseModel):
-    feedbacks: list
+    feedbacks: List[str]
+
+class AvaliacaoCreate(BaseModel):
+    cliente: str
+    nota: int
+    texto: str
+    sentimento: str
 
 # --- FUNÇÕES AUXILIARES ---
 
@@ -79,31 +91,53 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
 def read_root():
     return {"status": "Online", "engine": "Gemini 2.5 Flash Ativo"}
 
+# --- ROTAS DE AVALIAÇÕES (DADOS DINÂMICOS) ---
+
+@app.get("/api/avaliacoes")
+def listar_avaliacoes(db: Session = Depends(get_db)):
+    """Busca todas as avaliações reais salvas no banco de dados."""
+    return db.query(Avaliacao).order_by(desc(Avaliacao.data)).all()
+
+@app.post("/api/avaliacoes")
+def criar_avaliacao(dados: AvaliacaoCreate, db: Session = Depends(get_db)):
+    """Cria uma nova avaliação de cliente no banco de dados."""
+    nova_av = Avaliacao(
+        cliente=dados.cliente,
+        nota=dados.nota,
+        texto=dados.texto,
+        sentimento=dados.sentimento
+    )
+    db.add(nova_av)
+    db.commit()
+    db.refresh(nova_av)
+    return nova_av
+
 # --- ROTA DA INTELIGÊNCIA ARTIFICIAL (CONEXÃO DIRETA GEMINI 2.5) ---
 
 @app.post("/api/feedbacks/analise")
 def analisar_feedbacks_ia(request: FeedbackRequest):
-    API_KEY = "AIzaSyDY-4Vs6VhCUy1NsAhTn62TRS8UPAY5y9k" 
+    # Cole a sua chave REAL aqui dentro das aspas, exatamente assim:
+    API_KEY = "AIzaSyBgSbopdaE4uRxgm72uZB1Z9k8DRvYuW8s"
         
     try:
         prompt = f"""
         Você é um consultor especialista em operações de delivery. 
         Analise estes feedbacks de clientes: {request.feedbacks}
         
-        Identifique os 2 maiores problemas e sugira soluções práticas.
+        Identifique os 2 maiores problemas operacionais e sugira soluções práticas e imediatas.
         Retorne APENAS um JSON (lista de objetos) com estas chaves exatas:
         'tipo' (use 'TrendingDown' ou 'AlertTriangle'), 'titulo', 'reclamacao' e 'dica'.
-        Não escreva nada além do código JSON.
+        Não escreva nenhuma introdução, explicação ou conclusão.
         """
         
-        # URL utilizando o modelo 2.5 Flash confirmado pelo seu sistema
+        # URL utilizando o modelo 2.5 Flash (v1beta para suporte a JSON estruturado)
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
         
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {
                 "responseMimeType": "application/json",
-                "temperature": 0.2 # Baixa temperatura para respostas mais exatas
+                "temperature": 0.2
             }
         }
         
@@ -115,7 +149,7 @@ def analisar_feedbacks_ia(request: FeedbackRequest):
         dados_ia = resposta.json()
         texto_puro = dados_ia['candidates'][0]['content']['parts'][0]['text']
         
-        # Extrator de segurança para garantir que pegamos apenas o JSON
+        # Extrator de segurança para isolar o JSON
         match = re.search(r'\[.*\]', texto_puro, re.DOTALL)
         if match:
             return json.loads(match.group(0))
@@ -126,9 +160,9 @@ def analisar_feedbacks_ia(request: FeedbackRequest):
         return [
             {
                 "tipo": "AlertTriangle",
-                "titulo": "IA Temporariamente Indisponível",
+                "titulo": "Análise Indisponível",
                 "reclamacao": "Não foi possível processar os sentimentos dos clientes agora.",
-                "dica": "Tente atualizar a página em alguns instantes."
+                "dica": "Verifique os logs do servidor ou tente novamente em alguns instantes."
             }
         ]
 
@@ -182,11 +216,13 @@ def get_dashboard_stats(periodo: str = Query("7dias"), db: Session = Depends(get
 def get_saude_financeira(periodo: str = Query("7dias"), db: Session = Depends(get_db)):
     query = apply_date_filter(db.query(Pedido).filter(Pedido.status == "CONCLUIDO"), periodo)
     pedidos = query.all()
+    if not pedidos:
+        return {"bruto": 0.0, "lucro_liquido": 0.0, "margem_percentual": "0%"}
+        
     faturamento = sum(p.valor_total for p in pedidos)
-    # Taxas iFood (26.2%) + Custos de Produção estimados
     taxas = faturamento * 0.262
     ids = [p.id_pedido for p in pedidos]
-    custos = db.query(func.sum(ItemPedido.custo_producao)).filter(ItemPedido.id_pedido.in_(ids)).scalar() or 0.0 if ids else 0.0
+    custos = db.query(func.sum(ItemPedido.custo_producao)).filter(ItemPedido.id_pedido.in_(ids)).scalar() or 0.0
     
     lucro = faturamento - taxas - custos
     margem = (lucro / faturamento * 100) if faturamento > 0 else 0
