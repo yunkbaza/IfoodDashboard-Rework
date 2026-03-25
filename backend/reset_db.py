@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from app.core.database import SessionLocal
 from app.models.pedido import Pedido, ItemPedido
 
-# Forçando o uso do IP correto para evitar conflitos no Mac
 API_URL = "http://127.0.0.1:8000/api/pedidos"
 
 def seed_limpo():
@@ -20,7 +19,7 @@ def seed_limpo():
     finally:
         db.close()
     
-    print("🌱 Gerando 50 novos pedidos com datas variadas...")
+    print("🌱 Gerando 150 novos pedidos (Histórico de 6 meses)...")
     produtos = [
         {"nome": "Hambúrguer Artesanal", "preco": 35.0, "custo": 12.0},
         {"nome": "Batata Frita", "preco": 18.0, "custo": 4.5},
@@ -29,16 +28,16 @@ def seed_limpo():
     ]
     bairros = ["Centro", "Vila Mariana", "Pinheiros", "Moema", "Tatuapé"]
 
-    for i in range(50):
-        # Gera datas espalhadas pelos últimos 7 dias
-        dias_atras = random.randint(0, 7)
+    for i in range(150):
+        # Agora gera dados dos últimos 180 dias!
+        dias_atras = random.randint(0, 180)
         hora = random.randint(11, 23)
         
         data_pedido = datetime.now() - timedelta(days=dias_atras)
         data_pedido = data_pedido.replace(hour=hora, minute=random.randint(0, 59))
         
         prod = random.choice(produtos)
-        qtd = random.randint(1, 3)
+        qtd = random.randint(1, 4)
 
         payload = {
             "id_pedido": f"IFD-{random.randint(10000, 99999)}",
@@ -61,7 +60,7 @@ def seed_limpo():
         except:
             pass
         
-    print("✅ Base de Dados resetada e populada com sucesso!")
+    print("✅ Base de Dados populada com histórico longo!")
 
 if __name__ == "__main__":
     seed_limpo()

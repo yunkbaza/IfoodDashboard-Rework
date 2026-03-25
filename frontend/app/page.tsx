@@ -1,23 +1,16 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { 
-  getDashboardStats, 
-  getFinanceiro, 
-  getVendasDiarias, 
-  getTopProdutos, 
-  getStatsBairros,
-  getStatsHorarios,
-  getStatsPagamentos 
+  getDashboardStats, getFinanceiro, getVendasDiarias, 
+  getTopProdutos, getStatsBairros, getStatsHorarios, getStatsPagamentos 
 } from "../services/api";
+
 import { 
-  DollarSign, 
-  ShoppingBag, 
-  TrendingUp, 
-  Percent, 
-  Loader2,
-  LayoutDashboard 
+  DollarSign, ShoppingBag, TrendingUp, Percent, Loader2, 
+  LayoutDashboard, ListTodo, MessageSquare, LogOut, Target
 } from "lucide-react";
 
 import SalesChart from "../components/SalesChart";
@@ -28,240 +21,222 @@ import PagamentosChart from "../components/PagamentosChart";
 import SimularPedidoButton from "../components/SimularPedidoButton";
 import ThemeToggle from "../components/ThemeToggle";
 import DashboardSettings, { DashboardConfig, ChartSize } from "../components/DashboardSettings";
-
-interface Stats {
-  faturamento_total: number;
-  total_pedidos: number;
-  ticket_medio: number;
-}
-
-interface Financeiro {
-  lucro_liquido: number;
-  margem_percentual: string;
-}
-
-interface VendaDiaria {
-  data: string;
-  valor: number;
-}
-
-interface TopProduto {
-  nome: string;
-  quantidade: number;
-  receita: number;
-}
-
-interface BairroData {
-  bairro: string;
-  pedidos: number;
-}
-
-interface HorarioData {
-  hora: string;
-  pedidos: number;
-}
-
-interface PagamentoData {
-  tipo: string;
-  valor: number;
-}
-
-interface DashboardData {
-  stats: Stats;
-  financeiro: Financeiro;
-  vendasDiarias: VendaDiaria[];
-  topProdutos: TopProduto[];
-  bairros: BairroData[];
-  horarios: HorarioData[];
-  pagamentos: PagamentoData[];
-}
-
-type PeriodoType = 'hoje' | 'ontem' | '7dias';
+import KanbanBoard from "../components/KanbanBoard";
+import FeedbackView from "../components/FeedbackView"; 
+import MetaAnualModal from "../components/MetaAnualModal"; // <-- NOSSO NOVO COMPONENTE
 
 export default function Dashboard() {
+  const router = useRouter();
+
+  const [activeMenu, setActiveMenu] = useState<'dashboard' | 'operacao' | 'feedbacks'>('dashboard');
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) router.push("/login");
+  }, [router]);
+
   const [config, setConfig] = useState<DashboardConfig>({
-    showSales: true, salesSize: 'M',
-    showTopProducts: true, topProductsSize: 'P',
-    showBairros: true, bairrosSize: 'M',
-    showPagamentos: true, pagamentosSize: 'P',
+    showSales: true, salesSize: 'M', showTopProducts: true, topProductsSize: 'P',
+    showBairros: true, bairrosSize: 'M', showPagamentos: true, pagamentosSize: 'P',
     showHorarios: true, horariosSize: 'G',
   });
 
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // ESTADOS DO FILTRO
-  const [periodo, setPeriodo] = useState<PeriodoType>('7dias');
+  // ATUALIZADO: Filtros agora incluem Mensal no lugar de Ontem
+  const [periodo, setPeriodo] = useState<'hoje' | '7dias' | 'mensal'>('7dias');
   const [isFiltering, setIsFiltering] = useState(false);
+  
+  // ESTADO DO MODAL DA META ANUAL
+  const [isMetaModalOpen, setIsMetaModalOpen] = useState(false);
 
   const sizeMap: Record<ChartSize, string> = {
-    P: "lg:col-span-1",
-    M: "lg:col-span-2",
-    G: "lg:col-span-3"
+    P: "lg:col-span-1", M: "lg:col-span-2", G: "lg:col-span-3"
   };
 
   useEffect(() => {
     async function loadAllData() {
-      // Se já temos dados na tela, ativamos apenas o esmaecimento do filtro
       if (data) setIsFiltering(true);
-
       try {
         const [stats, financeiro, vendasDiarias, topProdutos, bairros, horarios, pagamentos] = await Promise.all([
-          getDashboardStats(periodo),
-          getFinanceiro(periodo),
-          getVendasDiarias(periodo),
-          getTopProdutos(periodo),
-          getStatsBairros(periodo),
-          getStatsHorarios(periodo),
-          getStatsPagamentos(periodo)
+          getDashboardStats(periodo), getFinanceiro(periodo), getVendasDiarias(periodo),
+          getTopProdutos(periodo), getStatsBairros(periodo), getStatsHorarios(periodo), getStatsPagamentos(periodo)
         ]);
-        
         setData({ stats, financeiro, vendasDiarias, topProdutos, bairros, horarios, pagamentos });
       } catch (error) {
         console.error("Erro na sincronização:", error);
       } finally {
         setLoading(false);
-        setIsFiltering(false); // Desliga a animação de filtro
+        setIsFiltering(false);
       }
     }
-    
-    // O useEffect agora dispara toda vez que a variável 'periodo' mudar
     loadAllData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodo]); 
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user_name");
+    router.push("/login");
+  };
 
   if (loading || !data) {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-[#111111] flex flex-col items-center justify-center gap-6">
         <Image src="/IfoodVetor.svg" alt="iFood" width={120} height={50} priority />
-        <div className="flex items-center gap-2 text-slate-400 font-bold tracking-[0.2em] text-xs uppercase">
-          <Loader2 className="animate-spin" size={16} />
-          Sincronizando Engine
-        </div>
+        <Loader2 className="animate-spin text-[#EA1D2C]" size={32} />
       </div>
     );
   }
 
   const cards = [
-    { title: "Faturamento Bruto", value: `R$ ${data.stats.faturamento_total.toLocaleString('pt-BR')}`, icon: DollarSign, color: "text-emerald-500 bg-emerald-500/10" },
+    { title: "Faturamento", value: `R$ ${data.stats.faturamento_total.toLocaleString('pt-BR')}`, icon: DollarSign, color: "text-emerald-500 bg-emerald-500/10" },
     { title: "Lucro Líquido", value: `R$ ${data.financeiro.lucro_liquido.toLocaleString('pt-BR')}`, icon: TrendingUp, color: "text-blue-500 bg-blue-500/10" },
-    { title: "Total Pedidos", value: data.stats.total_pedidos, icon: ShoppingBag, color: "text-purple-500 bg-purple-500/10" },
-    { title: "Margem Real", value: data.financeiro.margem_percentual, icon: Percent, color: "text-[#EA1D2C] bg-[#EA1D2C]/10" },
-  ];
-
-  const filterOptions: { id: PeriodoType; label: string }[] = [
-    { id: 'hoje', label: 'Hoje' },
-    { id: 'ontem', label: 'Ontem' },
-    { id: '7dias', label: '7 Dias' }
+    { title: "Pedidos Entregues", value: data.stats.total_pedidos, icon: ShoppingBag, color: "text-purple-500 bg-purple-500/10" },
+    { title: "Margem de Lucro", value: data.financeiro.margem_percentual, icon: Percent, color: "text-[#EA1D2C] bg-[#EA1D2C]/10" },
   ];
 
   return (
-    <main className="p-4 md:p-8 bg-slate-50 dark:bg-[#111111] min-h-screen transition-colors duration-300 font-sans relative overflow-x-hidden">
-      <div className="max-w-7xl mx-auto relative z-10">
-        
-        <header className="mb-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-          <div className="flex items-center gap-6">
-            <Image src="/IfoodVetor.svg" alt="iFood Logo" width={110} height={45} className="object-contain" priority />
-            <div className="h-10 w-px bg-slate-200 dark:bg-[#2C2C2E] hidden sm:block"></div>
-            <div>
-              <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight uppercase leading-none">Dashboard Pro</h1>
-              <p className="text-slate-500 dark:text-[#8E8E93] text-[10px] font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                Engine Online
-              </p>
-            </div>
+    <div className="flex h-screen bg-slate-50 dark:bg-[#111111] overflow-hidden font-sans transition-colors duration-300">
+      
+      <aside className="w-20 lg:w-64 bg-white dark:bg-[#1C1C1E] border-r border-slate-200 dark:border-[#2C2C2E] flex flex-col justify-between flex-shrink-0 z-20">
+        <div>
+          <div className="h-24 flex items-center justify-center lg:justify-start lg:px-8 border-b border-slate-100 dark:border-[#2C2C2E]">
+            <Image src="/IfoodVetor.svg" alt="iFood Logo" width={80} height={35} className="object-contain" priority />
           </div>
           
-          {/* NOVA ÁREA DE CONTROLES: Filtro + Personalização */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto justify-end">
-            
-            {/* COMPONENTE DE FILTRO DE DATA */}
-            <div className="flex items-center bg-white dark:bg-[#1C1C1E] p-1 rounded-xl border border-slate-200 dark:border-[#2C2C2E] shadow-sm w-full sm:w-auto overflow-x-auto">
-              {filterOptions.map((opt) => (
-                <button
-                  key={opt.id}
-                  onClick={() => setPeriodo(opt.id)}
-                  disabled={isFiltering}
-                  className={`flex-1 sm:flex-none px-4 py-2 text-[11px] sm:text-xs font-bold rounded-lg transition-all duration-300 uppercase tracking-wide whitespace-nowrap ${
-                    periodo === opt.id 
-                      ? 'bg-[#EA1D2C] text-white shadow-md' 
-                      : 'text-slate-500 hover:text-slate-800 dark:text-[#8E8E93] dark:hover:text-white hover:bg-slate-50 dark:hover:bg-[#242426]'
-                  } ${isFiltering ? 'opacity-50 cursor-wait' : ''}`}
-                >
-                  {opt.label}
-                </button>
-              ))}
+          <nav className="p-4 space-y-2 mt-4">
+            <button 
+              onClick={() => setActiveMenu('dashboard')}
+              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-bold text-sm ${
+                activeMenu === 'dashboard' ? 'bg-[#EA1D2C]/10 text-[#EA1D2C]' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-[#242426]'
+              }`}
+            >
+              <LayoutDashboard size={20} /> <span className="hidden lg:block">Resumo da Loja</span>
+            </button>
+            <button 
+              onClick={() => setActiveMenu('operacao')}
+              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-bold text-sm ${
+                activeMenu === 'operacao' ? 'bg-[#EA1D2C]/10 text-[#EA1D2C]' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-[#242426]'
+              }`}
+            >
+              <ListTodo size={20} /> <span className="hidden lg:block">Tela da Cozinha</span>
+            </button>
+            <button 
+              onClick={() => setActiveMenu('feedbacks')}
+              className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-bold text-sm ${
+                activeMenu === 'feedbacks' ? 'bg-[#EA1D2C]/10 text-[#EA1D2C]' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-[#242426]'
+              }`}
+            >
+              <MessageSquare size={20} /> <span className="hidden lg:block">Opinião dos Clientes</span>
+            </button>
+          </nav>
+        </div>
+
+        <div className="p-4 border-t border-slate-100 dark:border-[#2C2C2E]">
+           <button onClick={handleLogout} className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl transition-all font-bold text-sm text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10">
+              <LogOut size={20} /> <span className="hidden lg:block">Sair do Sistema</span>
+            </button>
+        </div>
+      </aside>
+
+      <main className="flex-1 overflow-y-auto relative">
+        <div className="max-w-7xl mx-auto p-4 md:p-8">
+          
+          <header className="mb-10 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                {activeMenu === 'dashboard' && 'Desempenho Financeiro'}
+                {activeMenu === 'operacao' && 'Acompanhamento de Pedidos'}
+                {activeMenu === 'feedbacks' && 'Avaliações e Dicas'}
+              </h1>
+              <p className="text-slate-500 dark:text-[#8E8E93] text-[10px] font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
+                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Sistema Ativo
+              </p>
             </div>
+            
+            {/* Aqui está a mágica: justify-end e agrupamento lógico */}
+            <div className="flex flex-wrap items-center justify-start xl:justify-end gap-3 w-full xl:w-auto">
+              
+              {activeMenu === 'dashboard' && (
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex items-center bg-white dark:bg-[#1C1C1E] p-1 rounded-xl border border-slate-200 dark:border-[#2C2C2E] shadow-sm">
+                    {(['hoje', '7dias', 'mensal'] as const).map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => setPeriodo(opt)}
+                        disabled={isFiltering}
+                        className={`px-4 py-2 text-xs font-bold rounded-lg transition-all uppercase ${periodo === opt ? 'bg-[#EA1D2C] text-white' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'}`}
+                      >
+                        {opt === '7dias' ? '7 Dias' : opt === 'mensal' ? 'Mensal' : opt}
+                      </button>
+                    ))}
+                  </div>
 
-            <div className="h-8 w-px bg-slate-200 dark:bg-[#2C2C2E] hidden sm:block"></div>
+                  <button 
+                    onClick={() => setIsMetaModalOpen(true)}
+                    className="flex items-center gap-2 bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-2 rounded-xl text-xs font-bold uppercase hover:opacity-80 transition-opacity shadow-sm"
+                  >
+                    <Target size={16} /> Meta Anual
+                  </button>
 
-            <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-              <DashboardSettings config={config} setConfig={setConfig} />
-              <div className="flex items-center gap-2">
+                  <DashboardSettings config={config} setConfig={setConfig} />
+                </div>
+              )}
+              
+              {/* O separador e os botões de ação ficam sempre agrupados */}
+              <div className="flex items-center gap-3 xl:border-l xl:border-slate-200 xl:dark:border-[#2C2C2E] xl:pl-3">
                 <ThemeToggle />
                 <SimularPedidoButton />
               </div>
+              
             </div>
-          </div>
-        </header>
-        
-        {/* CONTAINER COM EFEITO DE TRANSIÇÃO QUANDO FILTRA */}
-        <div className={`transition-opacity duration-500 ${isFiltering ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-            {cards.map((card, index) => (
-              <div key={index} className="bg-white dark:bg-[#1C1C1E] p-6 rounded-[24px] border border-slate-100 dark:border-[#2C2C2E] shadow-sm hover:border-[#EA1D2C]/20 transition-all group">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-slate-500 dark:text-[#8E8E93] text-xs font-bold uppercase tracking-wider">{card.title}</span>
-                  <div className={`${card.color} p-2.5 rounded-xl transition-transform group-hover:scale-110`}>
-                    <card.icon size={18} />
-                  </div>
+          </header>
+
+          <div className={`transition-opacity duration-500 ${isFiltering ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+            
+            {activeMenu === 'dashboard' && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+                  {cards.map((card, index) => (
+                    <div key={index} className="bg-white dark:bg-[#1C1C1E] p-6 rounded-[24px] border border-slate-100 dark:border-[#2C2C2E] shadow-sm">
+                      <div className="flex justify-between items-center mb-4">
+                        <span className="text-slate-500 text-xs font-bold uppercase">{card.title}</span>
+                        <div className={`${card.color} p-2.5 rounded-xl`}><card.icon size={18} /></div>
+                      </div>
+                      <div className="text-3xl font-bold text-slate-900 dark:text-white">{card.value}</div>
+                    </div>
+                  ))}
                 </div>
-                <div className="text-3xl font-bold text-slate-900 dark:text-white tracking-tighter">{card.value}</div>
-              </div>
-            ))}
-          </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {config.showSales && (
-              <div className={`${sizeMap[config.salesSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] h-120 transition-all duration-500`}>
-                <SalesChart data={data.vendasDiarias} />
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+                  {config.showSales && <div className={`${sizeMap[config.salesSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] h-120`}><SalesChart data={data.vendasDiarias} /></div>}
+                  {config.showTopProducts && <div className={`${sizeMap[config.topProductsSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] h-120`}><TopProducts data={data.topProdutos} /></div>}
+                  {config.showBairros && <div className={`${sizeMap[config.bairrosSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] h-120`}><BairrosChart data={data.bairros} /></div>}
+                  {config.showPagamentos && <div className={`${sizeMap[config.pagamentosSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] h-120`}><PagamentosChart data={data.pagamentos} /></div>}
+                  {config.showHorarios && <div className={`${sizeMap[config.horariosSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] h-120`}><HorariosChart data={data.horarios} /></div>}
+                </div>
+              </>
+            )}
+
+            {activeMenu === 'operacao' && (
+              <div className="bg-white dark:bg-[#1C1C1E] p-8 rounded-[32px] border border-slate-100 dark:border-[#2C2C2E] shadow-sm min-h-[70vh]">
+                <KanbanBoard periodo={periodo} />
               </div>
             )}
 
-            {config.showTopProducts && (
-              <div className={`${sizeMap[config.topProductsSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] h-120 transition-all duration-500`}>
-                <TopProducts data={data.topProdutos} />
-              </div>
+            {activeMenu === 'feedbacks' && (
+              <FeedbackView />
             )}
 
-            {config.showBairros && (
-              <div className={`${sizeMap[config.bairrosSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] h-120 transition-all duration-500`}>
-                <BairrosChart data={data.bairros} />
-              </div>
-            )}
-
-            {config.showPagamentos && (
-              <div className={`${sizeMap[config.pagamentosSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] h-120 transition-all duration-500`}>
-                <PagamentosChart data={data.pagamentos} />
-              </div>
-            )}
-
-            {config.showHorarios && (
-              <div className={`${sizeMap[config.horariosSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] h-120 transition-all duration-500`}>
-                <HorariosChart data={data.horarios} />
-              </div>
-            )}
-
-            {(!config.showSales && !config.showTopProducts && !config.showBairros && !config.showHorarios && !config.showPagamentos) && (
-              <div className="lg:col-span-3 flex flex-col items-center justify-center p-24 border-4 border-dashed border-slate-100 dark:border-[#2C2C2E] rounded-4xl opacity-40">
-                <LayoutDashboard size={64} className="text-slate-300 mb-6" />
-                <h3 className="text-xl font-bold text-slate-400">Nenhum módulo ativo</h3>
-                <p className="text-slate-500 mt-2">Personalize sua visão clicando no botão no topo.</p>
-              </div>
-            )}
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+
+      {/* MODAL DA META ANUAL RENDERIZADO NO FUNDO */}
+      <MetaAnualModal isOpen={isMetaModalOpen} onClose={() => setIsMetaModalOpen(false)} />
+
+    </div>
   );
 }

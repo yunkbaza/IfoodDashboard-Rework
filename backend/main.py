@@ -4,20 +4,22 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func, cast, Date, desc
 from datetime import datetime, timedelta
+from pydantic import BaseModel
 import uvicorn
+import json
+import requests 
+import re 
 
 from app.core.database import get_db, engine
-# IMPORTANTE: Adicionámos a importação do Usuario aqui
 from app.models.pedido import Pedido, ItemPedido, Usuario, Base 
 from app.schemas.pedido import PedidoSchema
 
-# Importações do nosso novo motor de segurança
 from app.core.auth import verificar_senha, obter_hash_senha, criar_token_acesso, ACCESS_TOKEN_EXPIRE_MINUTES
 
-# Cria as tabelas automaticamente
+# Inicialização automática do Banco de Dados
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="iFood Dashboard API", version="1.1.0")
+app = FastAPI(title="iFood Dashboard Pro API", version="2.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -27,190 +29,208 @@ app.add_middleware(
     allow_headers=["*"], 
 )
 
-# --- ROTAS DE AUTENTICAÇÃO (NOVAS) ---
+# --- SCHEMAS DE DADOS ---
+class StatusUpdate(BaseModel):
+    status: str
+
+class FeedbackRequest(BaseModel):
+    feedbacks: list
+
+# --- FUNÇÕES AUXILIARES ---
+
+def apply_date_filter(query, periodo: str):
+    hoje = datetime.now().date()
+    if periodo == 'hoje':
+        return query.filter(cast(Pedido.data_hora, Date) == hoje)
+    elif periodo == 'mensal':
+        trinta_dias_atras = hoje - timedelta(days=30)
+        return query.filter(cast(Pedido.data_hora, Date) >= trinta_dias_atras)
+    else: # Padrão: 7 dias
+        sete_dias_atras = hoje - timedelta(days=7)
+        return query.filter(cast(Pedido.data_hora, Date) >= sete_dias_atras)
+
+# --- ROTAS DE AUTENTICAÇÃO ---
 
 @app.post("/api/auth/registrar")
 def registrar_admin(db: Session = Depends(get_db)):
     usuario_existente = db.query(Usuario).filter(Usuario.email == "admin@ifood.com").first()
     if usuario_existente:
-        return {"message": "Admin já existe."}
+        return {"message": "Admin já cadastrado."}
         
     novo_admin = Usuario(
-        nome="Administrador",
+        nome="Administrador iFood",
         email="admin@ifood.com",
         senha_hash=obter_hash_senha("senha123")
     )
     db.add(novo_admin)
     db.commit()
-    return {"message": "Usuário admin@ifood.com criado com a senha: senha123"}
+    return {"message": "Acesso criado: admin@ifood.com / senha123"}
 
 @app.post("/api/auth/login")
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     usuario = db.query(Usuario).filter(Usuario.email == form_data.username).first()
-    
     if not usuario or not verificar_senha(form_data.password, usuario.senha_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Email ou palavra-passe incorretos",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise HTTPException(status_code=401, detail="Credenciais incorretas")
         
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = criar_token_acesso(
-        data={"sub": usuario.email}, expires_delta=access_token_expires
-    )
+    access_token = criar_token_acesso(data={"sub": usuario.email})
     return {"access_token": access_token, "token_type": "bearer", "nome": usuario.nome}
-
-
-# --- FUNÇÃO AUXILIAR DE FILTRO DE DATA ---
-def apply_date_filter(query, periodo: str):
-    hoje = datetime.now().date()
-    if periodo == 'hoje':
-        return query.filter(cast(Pedido.data_hora, Date) == hoje)
-    elif periodo == 'ontem':
-        ontem = hoje - timedelta(days=1)
-        return query.filter(cast(Pedido.data_hora, Date) == ontem)
-    else: # 7dias (Padrão)
-        sete_dias_atras = hoje - timedelta(days=7)
-        return query.filter(cast(Pedido.data_hora, Date) >= sete_dias_atras)
 
 @app.get("/")
 def read_root():
-    return {"status": "API iFood Pro ativa", "versao": "1.1.0"}
+    return {"status": "Online", "engine": "Gemini 2.5 Flash Ativo"}
+
+# --- ROTA DA INTELIGÊNCIA ARTIFICIAL (CONEXÃO DIRETA GEMINI 2.5) ---
+
+@app.post("/api/feedbacks/analise")
+def analisar_feedbacks_ia(request: FeedbackRequest):
+    API_KEY = "AIzaSyDY-4Vs6VhCUy1NsAhTn62TRS8UPAY5y9k" 
+        
+    try:
+        prompt = f"""
+        Você é um consultor especialista em operações de delivery. 
+        Analise estes feedbacks de clientes: {request.feedbacks}
+        
+        Identifique os 2 maiores problemas e sugira soluções práticas.
+        Retorne APENAS um JSON (lista de objetos) com estas chaves exatas:
+        'tipo' (use 'TrendingDown' ou 'AlertTriangle'), 'titulo', 'reclamacao' e 'dica'.
+        Não escreva nada além do código JSON.
+        """
+        
+        # URL utilizando o modelo 2.5 Flash confirmado pelo seu sistema
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
+        
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "responseMimeType": "application/json",
+                "temperature": 0.2 # Baixa temperatura para respostas mais exatas
+            }
+        }
+        
+        resposta = requests.post(url, json=payload, timeout=15)
+        
+        if resposta.status_code != 200:
+            raise Exception(f"Google API Error {resposta.status_code}")
+            
+        dados_ia = resposta.json()
+        texto_puro = dados_ia['candidates'][0]['content']['parts'][0]['text']
+        
+        # Extrator de segurança para garantir que pegamos apenas o JSON
+        match = re.search(r'\[.*\]', texto_puro, re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
+        return json.loads(texto_puro)
+            
+    except Exception as e:
+        print(f"🚨 Erro na IA: {e}")
+        return [
+            {
+                "tipo": "AlertTriangle",
+                "titulo": "IA Temporariamente Indisponível",
+                "reclamacao": "Não foi possível processar os sentimentos dos clientes agora.",
+                "dica": "Tente atualizar a página em alguns instantes."
+            }
+        ]
+
+# --- ROTAS DE OPERAÇÃO E DASHBOARD ---
 
 @app.post("/api/pedidos")
 def criar_pedido(pedido_data: PedidoSchema, db: Session = Depends(get_db)):
     novo_pedido = Pedido(
-        id_pedido=pedido_data.id_pedido,
-        status=pedido_data.status,
-        valor_total=pedido_data.valor_total,
-        taxa_entrega=pedido_data.taxa_entrega,
-        forma_pagamento=pedido_data.forma_pagamento,
-        bairro_destino=pedido_data.bairro_destino,
+        id_pedido=pedido_data.id_pedido, status=pedido_data.status,
+        valor_total=pedido_data.valor_total, taxa_entrega=pedido_data.taxa_entrega,
+        forma_pagamento=pedido_data.forma_pagamento, bairro_destino=pedido_data.bairro_destino,
         data_hora=pedido_data.data_hora
     )
     db.add(novo_pedido)
-    
     for item in pedido_data.itens:
-        novo_item = ItemPedido(
-            id_pedido=pedido_data.id_pedido,
-            nome_produto=item.nome_produto,
-            quantidade=item.quantidade,
-            preco_unitario=item.preco_unitario,
-            # ADICIONADO: Guardar o custo de produção para o gráfico de Lucro funcionar
-            custo_producao=getattr(item, 'custo_producao', 0.0) 
-        )
-        db.add(novo_item)
-    
+        db.add(ItemPedido(
+            id_pedido=pedido_data.id_pedido, nome_produto=item.nome_produto,
+            quantidade=item.quantidade, preco_unitario=item.preco_unitario,
+            custo_producao=getattr(item, 'custo_producao', 0.0)
+        ))
     db.commit()
-    db.refresh(novo_pedido)
-    return {"message": "Pedido processado", "id": novo_pedido.id_pedido}
+    return {"status": "success", "id": novo_pedido.id_pedido}
 
-# --- ROTAS DE DASHBOARD EXISTENTES ---
+@app.get("/api/pedidos")
+def listar_pedidos(periodo: str = Query("7dias"), db: Session = Depends(get_db)):
+    query = db.query(Pedido)
+    query = apply_date_filter(query, periodo)
+    return query.order_by(desc(Pedido.data_hora)).all()
+
+@app.put("/api/pedidos/{id_pedido}/status")
+def atualizar_status(id_pedido: str, status_data: StatusUpdate, db: Session = Depends(get_db)):
+    pedido = db.query(Pedido).filter(Pedido.id_pedido == id_pedido).first()
+    if not pedido:
+        raise HTTPException(status_code=404, detail="Pedido não encontrado")
+    pedido.status = status_data.status
+    db.commit()
+    return {"message": "Status atualizado"}
 
 @app.get("/api/dashboard/stats")
 def get_dashboard_stats(periodo: str = Query("7dias"), db: Session = Depends(get_db)):
-    query = db.query(Pedido)
-    query = apply_date_filter(query, periodo)
-    
-    total_pedidos = query.count()
-    faturamento_total = query.with_entities(func.sum(Pedido.valor_total)).scalar() or 0.0
-    ticket_medio = faturamento_total / total_pedidos if total_pedidos > 0 else 0.0
-    
+    query = apply_date_filter(db.query(Pedido), periodo)
+    total = query.count()
+    faturamento = query.with_entities(func.sum(Pedido.valor_total)).scalar() or 0.0
     return {
-        "faturamento_total": round(faturamento_total, 2),
-        "total_pedidos": total_pedidos,
-        "ticket_medio": round(ticket_medio, 2)
+        "faturamento_total": round(faturamento, 2),
+        "total_pedidos": total,
+        "ticket_medio": round(faturamento / total, 2) if total > 0 else 0.0
     }
 
 @app.get("/api/dashboard/financeiro")
 def get_saude_financeira(periodo: str = Query("7dias"), db: Session = Depends(get_db)):
-    query = db.query(Pedido).filter(Pedido.status == "CONCLUIDO")
-    query = apply_date_filter(query, periodo)
+    query = apply_date_filter(db.query(Pedido).filter(Pedido.status == "CONCLUIDO"), periodo)
     pedidos = query.all()
+    faturamento = sum(p.valor_total for p in pedidos)
+    # Taxas iFood (26.2%) + Custos de Produção estimados
+    taxas = faturamento * 0.262
+    ids = [p.id_pedido for p in pedidos]
+    custos = db.query(func.sum(ItemPedido.custo_producao)).filter(ItemPedido.id_pedido.in_(ids)).scalar() or 0.0 if ids else 0.0
     
-    faturamento_bruto = sum(p.valor_total for p in pedidos)
-    taxas_ifood = faturamento_bruto * 0.262 
-    
-    # Extrai apenas os custos dos pedidos do período selecionado
-    ids_pedidos = [p.id_pedido for p in pedidos]
-    total_custos = 0.0
-    if ids_pedidos:
-        total_custos = db.query(func.sum(ItemPedido.custo_producao)).filter(ItemPedido.id_pedido.in_(ids_pedidos)).scalar() or 0.0
-        
-    lucro_liquido = faturamento_bruto - taxas_ifood - total_custos
+    lucro = faturamento - taxas - custos
+    margem = (lucro / faturamento * 100) if faturamento > 0 else 0
     return {
-        "bruto": round(faturamento_bruto, 2),
-        "taxas_estimadas": round(taxas_ifood, 2),
-        "custo_producao": round(total_custos, 2),
-        "lucro_liquido": round(lucro_liquido, 2),
-        "margem_percentual": f"{round((lucro_liquido/faturamento_bruto)*100, 1)}%" if faturamento_bruto > 0 else "0%"
+        "bruto": round(faturamento, 2),
+        "lucro_liquido": round(lucro, 2),
+        "margem_percentual": f"{round(margem, 1)}%"
     }
 
 @app.get("/api/dashboard/vendas-diarias")
 def get_vendas_diarias(periodo: str = Query("7dias"), db: Session = Depends(get_db)):
-    query = db.query(
-        cast(Pedido.data_hora, Date).label("data"),
-        func.sum(Pedido.valor_total).label("total")
-    ).filter(Pedido.status == "CONCLUIDO")
-    
-    query = apply_date_filter(query, periodo)
+    query = apply_date_filter(db.query(cast(Pedido.data_hora, Date).label("data"), func.sum(Pedido.valor_total).label("total")).filter(Pedido.status == "CONCLUIDO"), periodo)
     vendas = query.group_by("data").order_by("data").all()
-    
     return [{"data": v.data.strftime("%d/%m"), "valor": float(v.total)} for v in vendas]
 
 @app.get("/api/dashboard/top-produtos")
 def get_top_produtos(periodo: str = Query("7dias"), db: Session = Depends(get_db)):
-    query = db.query(
-        ItemPedido.nome_produto.label("nome"),
-        func.sum(ItemPedido.quantidade).label("qtd"),
-        func.sum(ItemPedido.quantidade * ItemPedido.preco_unitario).label("receita")
-    ).join(Pedido).filter(Pedido.status == "CONCLUIDO")
-    
-    query = apply_date_filter(query, periodo)
+    query = apply_date_filter(db.query(ItemPedido.nome_produto.label("nome"), func.sum(ItemPedido.quantidade).label("qtd"), func.sum(ItemPedido.quantidade * ItemPedido.preco_unitario).label("receita")).join(Pedido).filter(Pedido.status == "CONCLUIDO"), periodo)
     top = query.group_by("nome").order_by(desc("qtd")).limit(5).all()
-    
     return [{"nome": p.nome, "quantidade": p.qtd, "receita": round(p.receita, 2)} for p in top]
-
-# --- NOVAS ROTAS DE INTELIGÊNCIA MODULAR ---
 
 @app.get("/api/dashboard/bairros")
 def get_stats_bairros(periodo: str = Query("7dias"), db: Session = Depends(get_db)):
-    query = db.query(
-        Pedido.bairro_destino,
-        func.count(Pedido.id_pedido).label("total")
-    ).filter(Pedido.status == "CONCLUIDO")
-    
-    query = apply_date_filter(query, periodo)
-    resultado = query.group_by(Pedido.bairro_destino).order_by(desc("total")).all()
-    
-    return [{"bairro": r[0], "pedidos": r[1]} for r in resultado]
+    query = apply_date_filter(db.query(Pedido.bairro_destino, func.count(Pedido.id_pedido).label("total")).filter(Pedido.status == "CONCLUIDO"), periodo)
+    res = query.group_by(Pedido.bairro_destino).order_by(desc("total")).all()
+    return [{"bairro": r[0], "pedidos": r[1]} for r in res]
 
 @app.get("/api/dashboard/horarios")
 def get_stats_horarios(periodo: str = Query("7dias"), db: Session = Depends(get_db)):
-    query = db.query(
-        func.extract('hour', Pedido.data_hora).label("hora"),
-        func.count(Pedido.id_pedido).label("total")
-    )
-    
-    query = apply_date_filter(query, periodo)
-    resultado = query.group_by("hora").order_by("hora").all()
-    
-    return [{"hora": f"{int(r[0])}h", "pedidos": r[1]} for r in resultado]
+    query = apply_date_filter(db.query(func.extract('hour', Pedido.data_hora).label("hora"), func.count(Pedido.id_pedido).label("total")), periodo)
+    res = query.group_by("hora").order_by("hora").all()
+    return [{"hora": f"{int(r[0])}h", "pedidos": r[1]} for r in res]
 
 @app.get("/api/dashboard/pagamentos")
 def get_stats_pagamentos(periodo: str = Query("7dias"), db: Session = Depends(get_db)):
-    query = db.query(
-        Pedido.forma_pagamento,
-        func.count(Pedido.id_pedido).label("total")
-    )
-    
-    query = apply_date_filter(query, periodo)
-    resultado = query.group_by(Pedido.forma_pagamento).all()
-    
-    return [{"tipo": r[0], "valor": r[1]} for r in resultado]
+    query = apply_date_filter(db.query(Pedido.forma_pagamento, func.count(Pedido.id_pedido).label("total")), periodo)
+    res = query.group_by(Pedido.forma_pagamento).all()
+    return [{"tipo": r[0], "valor": r[1]} for r in res]
 
+@app.get("/api/dashboard/meta")
+def get_meta_anual(db: Session = Depends(get_db)):
+    inicio_ano = datetime.now().date().replace(month=1, day=1)
+    faturamento_ano = db.query(func.sum(Pedido.valor_total)).filter(Pedido.status == "CONCLUIDO", cast(Pedido.data_hora, Date) >= inicio_ano).scalar() or 0.0
+    return {"faturamento_anual": round(faturamento_ano, 2)}
 
 if __name__ == "__main__":
-    # Tem que ter 4 espaços (ou 1 Tab) antes do uvicorn.run aqui embaixo!
     uvicorn.run(app, host="0.0.0.0", port=8000)

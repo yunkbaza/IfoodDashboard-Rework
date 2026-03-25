@@ -45,3 +45,66 @@ export async function getStatsPagamentos(periodo: string = '7dias') {
   if (!res.ok) throw new Error('Falha ao buscar métodos de pagamento');
   return res.json();
 }
+
+export async function login(formData: FormData) {
+  // O FastAPI (Python) exige que os dados de login venham num formato específico chamado URLSearchParams
+  const data = new URLSearchParams();
+  formData.forEach((value, key) => data.append(key, value.toString()));
+
+  const res = await fetch(`${API_URL}/auth/login`, {
+    method: 'POST',
+    body: data,
+  });
+  
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || 'Falha no login');
+  }
+  return res.json();
+}
+
+export async function registrar(userData: any) {
+  const res = await fetch(`${API_URL}/auth/registrar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(userData),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.detail || 'Erro ao registrar');
+  }
+  return res.json();
+}
+
+export async function getPedidos(periodo: string = '7dias') {
+  const res = await fetch(`${API_URL}/pedidos?periodo=${periodo}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Falha ao buscar a lista de pedidos');
+  return res.json();
+}
+
+export async function atualizarStatusPedido(idPedido: string, novoStatus: string) {
+  const res = await fetch(`${API_URL}/pedidos/${idPedido}/status`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: novoStatus })
+  });
+  if (!res.ok) throw new Error('Falha ao atualizar o status');
+  return res.json();
+}
+
+export async function getMetaAnual() {
+  const res = await fetch(`${API_URL}/dashboard/meta`, { cache: 'no-store' });
+  if (!res.ok) throw new Error('Falha ao buscar meta anual');
+  return res.json();
+}
+
+export async function getAnaliseIA(feedbacks: any[]) {
+  const res = await fetch(`${API_URL}/feedbacks/analise`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ feedbacks })
+  });
+  if (!res.ok) throw new Error('Falha ao conectar com a IA');
+  return res.json();
+}
