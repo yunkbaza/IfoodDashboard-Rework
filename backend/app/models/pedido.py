@@ -13,7 +13,6 @@ class Pedido(Base):
     taxa_entrega = Column(Float, default=0.0)
     forma_pagamento = Column(String)
     
-    # NOVO CAMPO GEOGRÁFICO
     bairro_destino = Column(String, default="Não Informado") 
     
     itens = relationship("ItemPedido", back_populates="pedido")
@@ -29,3 +28,12 @@ class ItemPedido(Base):
     custo_producao = Column(Float, default=0.0)
 
     pedido = relationship("Pedido", back_populates="itens")
+
+# --- A NOSSA NOVA TABELA DE SEGURANÇA ---
+class Usuario(Base):
+    __tablename__ = "usuarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    senha_hash = Column(String, nullable=False)
+    nome = Column(String, nullable=False)

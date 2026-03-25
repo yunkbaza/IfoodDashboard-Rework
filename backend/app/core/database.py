@@ -1,14 +1,21 @@
 import os
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 from dotenv import load_dotenv
 
-# Carrega as variáveis do arquivo .env
+# Força o carregamento das variáveis do arquivo .env
 load_dotenv()
 
 # Pega a URL do banco de dados
 SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+
+# --- TRAVA DE SEGURANÇA ---
+# Impede o erro genérico do SQLAlchemy e te avisa exatamente o que faltou
+if SQLALCHEMY_DATABASE_URL is None:
+    raise ValueError(
+        "🚨 ERRO CRÍTICO: A variável DATABASE_URL não foi encontrada!\n"
+        "Verifique se o arquivo '.env' foi criado corretamente dentro da pasta 'backend'."
+    )
 
 # Cria o "motor" que vai conectar com o PostgreSQL
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
