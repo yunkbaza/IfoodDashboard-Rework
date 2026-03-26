@@ -34,7 +34,7 @@ app = FastAPI(title="Ifood Dashboard API", version="3.2.0")
 # Removido os links "quebrados" da formatação markdown
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://ifood-dashboard-rework.vercel.app", ], # Domínios seguros do Frontend
+    allow_origins=["*"], # Domínios seguros do Frontend
     allow_credentials=True,
     allow_methods=["*"], 
     allow_headers=["*"], 
