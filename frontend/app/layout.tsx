@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "../components/ThemeProvider";
-import { Toaster } from "sonner"; // ✅ 1. Importação da biblioteca de notificações
+import { LanguageProvider } from "../contexts/LanguageContext"; // ✅ 1. Importação do Provider de Idioma
+import { Toaster } from "sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "iFood Pro Dashboard",
-  description: "Análise avançada de estatísticas para lojas iFood",
+  description: "Advanced analytics for iFood stores",
 };
 
 export default function RootLayout({
@@ -25,28 +26,30 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    // O suppressHydrationWarning PRECISA estar aqui por causa do next-themes
-    <html lang="pt-BR" suppressHydrationWarning>
+    // O suppressHydrationWarning é necessário para evitar conflitos com o next-themes
+    <html lang="en" suppressHydrationWarning>
       <body 
-        // ✅ 2. As variáveis das fontes precisam estar no className para o Tailwind as reconhecer
-        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-full flex flex-col bg-slate-50 dark:bg-[#111111] transition-colors duration-300`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-full flex flex-col bg-slate-50 dark:bg-[#0A0A0B] transition-colors duration-300`}
       >
         <ThemeProvider 
           attribute="class" 
           defaultTheme="system" 
           enableSystem
-          disableTransitionOnChange // Adicionado para evitar bugs de transição no carregamento
+          disableTransitionOnChange
         >
-          {children}
-          
-          {/* ✅ 3. O Toaster que vai renderizar os avisos elegantes no canto superior direito */}
-          <Toaster 
-            position="top-right" 
-            richColors 
-            closeButton 
-            theme="system"
-            className="font-sans" // Garante que a notificação usa a fonte Geist
-          />
+          {/* ✅ 2. Envolvendo a aplicação com o Provider de Idioma */}
+          <LanguageProvider>
+            {children}
+            
+            {/* ✅ 3. Toaster configurado para notificações elegantes */}
+            <Toaster 
+              position="top-right" 
+              richColors 
+              closeButton 
+              theme="system"
+              className="font-sans"
+            />
+          </LanguageProvider>
         </ThemeProvider>
       </body>
     </html>

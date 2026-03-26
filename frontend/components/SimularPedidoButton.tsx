@@ -13,15 +13,15 @@ export default function SimularPedidoButton() {
     try {
       // Uses the centralized API service which automatically attaches the Bearer token
       await simularPedido();
-      toast.success("Transação simulada com sucesso!");
+      toast.success("Transaction simulated successfully!");
       
       // Forces a soft reload to fetch the new data without losing state
       window.location.reload(); 
     } catch (error: unknown) {
       if (error instanceof Error) {
-        toast.error(error.message || "Falha na comunicação com a API.");
+        toast.error(error.message || "Failed to communicate with the API.");
       } else {
-        toast.error("Erro desconhecido ao simular transação.");
+        toast.error("Unknown error while simulating transaction.");
       }
     } finally {
       setLoading(false);
@@ -39,7 +39,7 @@ export default function SimularPedidoButton() {
       ) : (
         <PlusCircle size={16} className="group-hover:rotate-90 transition-transform duration-300" />
       )}
-      <span>{loading ? "Processando..." : "Simular Transação"}</span>
+      <span>{loading ? "Processing..." : "Simulate Order"}</span>
     </button>
   );
 }

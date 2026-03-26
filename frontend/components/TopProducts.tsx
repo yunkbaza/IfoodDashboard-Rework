@@ -19,41 +19,41 @@ interface Product {
 }
 
 export default function TopProducts({ data }: { data: Product[] }) {
-  // ✅ PALETA IFOOD EXCLUSIVA: Variações de hierarquia para o ranking
+  // ✅ EXCLUSIVE IFOOD PALETTE: Hierarchy variations for the ranking
   const IFOOD_PALETTE = [
-    '#EA1D2C', // 1º Lugar: Vermelho Puro iFood
-    '#B31622', // 2º Lugar: Vermelho Escuro
-    '#F23D4C', // 3º Lugar: Vermelho Vivo
-    '#E0525D', // 4º Lugar: Vermelho Suave
-    '#FF8C96', // 5º Lugar: Vermelho Pastel
+    '#EA1D2C', // 1st Place: Pure iFood Red
+    '#B31622', // 2nd Place: Dark Red
+    '#F23D4C', // 3rd Place: Vivid Red
+    '#E0525D', // 4th Place: Soft Red
+    '#FF8C96', // 5th Place: Pastel Red
   ];
 
   return (
-    // ✅ CORREÇÃO DE ESTRUTURA: flex-1 e min-h-0 garantem o encaixe perfeito no grid dinâmico
+    // ✅ STRUCTURAL FIX: flex-1 and min-h-0 ensure a perfect fit in the dynamic grid
     <div className="flex-1 flex flex-col min-h-0 w-full group">
       
-      {/* Cabeçalho Refinado e 'iFoodizado' - shrink-0 impede que seja esmagado */}
+      {/* Refined Header - shrink-0 prevents it from being squashed */}
       <div className="mb-6 shrink-0">
         <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] mb-1">
-          Métricas de Menu
+          Menu Metrics
         </h3>
         <div className="flex items-center gap-2">
           <div className="p-2 rounded-lg bg-[#EA1D2C]/10 text-[#EA1D2C]">
             <Trophy size={20} />
           </div>
           <p className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">
-            Campeões de Vendas
+            Top Sellers
           </p>
         </div>
       </div>
 
-      {/* Container do Gráfico (Este é o que cresce/encolhe) */}
+      {/* Chart Container (This grows/shrinks) */}
       <div className="flex-1 min-h-0 w-full relative">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart 
             data={data} 
             layout="vertical" 
-            margin={{ top: 0, right: 20, left: 10, bottom: 0 }} // Margens ajustadas para não cortar
+            margin={{ top: 0, right: 20, left: 10, bottom: 0 }} // Adjusted margins to prevent clipping
           >
             <CartesianGrid 
               strokeDasharray="0" 
@@ -69,7 +69,7 @@ export default function TopProducts({ data }: { data: Product[] }) {
               type="category" 
               axisLine={false} 
               tickLine={false} 
-              width={110} // Espaço fixo para os nomes não cortarem as barras
+              width={110} // Fixed space so names don't overlap bars
               tick={(props) => {
                 const { x, y, payload } = props;
                 return (
@@ -82,7 +82,7 @@ export default function TopProducts({ data }: { data: Product[] }) {
                       fill="currentColor" 
                       className="text-[10px] font-black fill-slate-600 dark:fill-slate-400 uppercase tracking-tighter"
                     >
-                      {/* Truncagem elegante aumentada para 18 caracteres */}
+                      {/* Elegant truncation increased to 18 characters */}
                       {payload.value.length > 18 ? `${payload.value.substring(0, 18)}...` : payload.value}
                     </text>
                   </g>
@@ -90,7 +90,7 @@ export default function TopProducts({ data }: { data: Product[] }) {
               }}
             />
 
-            {/* Tooltip 'iFoodized' com Glassmorphism Atualizado */}
+            {/* Glassmorphism Tooltip */}
             <Tooltip 
               cursor={{ fill: 'rgba(234, 29, 44, 0.04)' }}
               content={({ active, payload }) => {
@@ -99,17 +99,17 @@ export default function TopProducts({ data }: { data: Product[] }) {
                   return (
                     <div className="bg-white/95 dark:bg-[#111113]/95 backdrop-blur-xl p-5 rounded-3xl shadow-2xl border border-slate-100 dark:border-white/10 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-200">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                        Dados do Campeão
+                        Product Insights
                       </p>
                       <p className="text-sm font-black text-slate-900 dark:text-white mb-2 uppercase tracking-tight">
                         {item.nome}
                       </p>
                       <div className="space-y-1.5">
                         <p className="text-xs font-bold text-[#EA1D2C]">
-                          {item.quantidade} unidades vendidas
+                          {item.quantidade} units sold
                         </p>
                         <p className="text-xl font-black text-emerald-500 tabular-nums">
-                          R$ {item.receita.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          $ {item.receita.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                         </p>
                       </div>
                     </div>
@@ -119,7 +119,7 @@ export default function TopProducts({ data }: { data: Product[] }) {
               }}
             />
 
-            {/* A Barra: Tamanho otimizado para não ficar muito magra nem muito gorda */}
+            {/* The Bar: Optimized size to be neither too thin nor too thick */}
             <Bar 
               dataKey="quantidade" 
               radius={[0, 8, 8, 0]} 
@@ -139,10 +139,10 @@ export default function TopProducts({ data }: { data: Product[] }) {
         </ResponsiveContainer>
       </div>
 
-      {/* Legenda inferior fixa */}
+      {/* Fixed bottom legend */}
       <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 flex justify-between items-center shrink-0">
         <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-          Volume de pedidos no período
+          Order volume over period
         </p>
         <div className="flex gap-1.5">
           {IFOOD_PALETTE.map((color, i) => (

@@ -14,6 +14,10 @@ import {
   LayoutDashboard, ListTodo, MessageSquare, LogOut, Target, Menu, ChevronLeft
 } from "lucide-react";
 
+// Contexto de Idioma
+import { useLanguage } from "../contexts/LanguageContext"; // ✅ IMPORTADO
+import LanguageToggle from "../components/LanguageToggle"; // ✅ IMPORTADO
+
 // Componentes
 import SalesChart from "../components/SalesChart";
 import TopProducts from "../components/TopProducts";
@@ -42,6 +46,7 @@ interface DashboardData {
 
 export default function Dashboard() {
   const router = useRouter();
+  const { lang, t } = useLanguage(); // ✅ HOOK DE IDIOMA ATIVADO
   const [activeMenu, setActiveMenu] = useState<MenuOption>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
@@ -75,13 +80,13 @@ export default function Dashboard() {
       ]);
       setData({ stats, financeiro, vendasDiarias, topProdutos, bairros, horarios, pagamentos });
     } catch (error) {
-      console.error("Erro na sincronização:", error);
-      toast.error("Erro ao sincronizar dados com o servidor.");
+      console.error("Sync error:", error);
+      toast.error(lang === 'en' ? "Failed to synchronize data." : "Erro ao sincronizar dados.");
     } finally {
       setLoading(false);
       setIsFiltering(false);
     }
-  }, [periodo]);
+  }, [periodo, lang]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -90,13 +95,13 @@ export default function Dashboard() {
   }, [router, loadAllData]);
 
   useEffect(() => {
-    const wsUrl = "ws://127.0.0.1:8000/ws/pedidos"; 
+    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000/ws/pedidos"; 
     const socket = new WebSocket(wsUrl);
 
     socket.onmessage = (event) => {
       const socketData = JSON.parse(event.data);
       if (socketData.action === "new_order") {
-        toast.success(`Novo Pedido Recebido!`, { description: `ID: ${socketData.id_pedido}` });
+        toast.success(lang === 'en' ? "New Order Received!" : "Novo Pedido Recebido!", { description: `ID: ${socketData.id_pedido}` });
         loadAllData(); 
       } else if (socketData.action === "update_status") {
         loadAllData();
@@ -104,7 +109,7 @@ export default function Dashboard() {
     };
 
     return () => socket.close();
-  }, [loadAllData]);
+  }, [loadAllData, lang]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -156,24 +161,40 @@ export default function Dashboard() {
             <Image src="/IfoodVetor.svg" alt="iFood" fill className="object-contain" priority />
         </div>
         <Loader2 className="animate-spin text-[#EA1D2C]" size={32} />
-        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Atualizando Painel da Loja</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">
+          {lang === 'en' ? "Updating Store Dashboard" : "Atualizando Painel da Loja"}
+        </p>
       </div>
     );
   }
 
-  // Nomes mais claros para os indicadores de resultado
   const cards = [
-    { title: "Faturamento Bruto", value: `R$ ${data.stats.faturamento_total.toLocaleString('pt-BR')}`, icon: DollarSign, color: "text-emerald-500", glow: "shadow-emerald-500/10" },
-    { title: "Lucro Estimado", value: `R$ ${data.financeiro.lucro_liquido.toLocaleString('pt-BR')}`, icon: TrendingUp, color: "text-blue-500", glow: "shadow-blue-500/10" },
-    { title: "Total de Pedidos", value: data.stats.total_pedidos, icon: ShoppingBag, color: "text-purple-500", glow: "shadow-purple-500/10" },
-    { title: "Margem de Lucro", value: data.financeiro.margem_percentual, icon: Percent, color: "text-[#EA1D2C]", glow: "shadow-red-500/10" },
+    { 
+      title: t.cards.revenue, 
+      value: `${lang === 'en' ? '$' : 'R$'} ${data.stats.faturamento_total.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR')}`, 
+      icon: DollarSign, color: "text-emerald-500", glow: "shadow-emerald-500/10" 
+    },
+    { 
+      title: t.cards.profit, 
+      value: `${lang === 'en' ? '$' : 'R$'} ${data.financeiro.lucro_liquido.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR')}`, 
+      icon: TrendingUp, color: "text-blue-500", glow: "shadow-blue-500/10" 
+    },
+    { 
+      title: t.cards.orders, 
+      value: data.stats.total_pedidos.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR'), 
+      icon: ShoppingBag, color: "text-purple-500", glow: "shadow-purple-500/10" 
+    },
+    { 
+      title: t.cards.margin, 
+      value: data.financeiro.margem_percentual, 
+      icon: Percent, color: "text-[#EA1D2C]", glow: "shadow-red-500/10" 
+    },
   ];
 
-  // Navegação simplificada para facilitar o uso no dia a dia
   const navItems = [
-    { id: 'dashboard' as const, label: 'Visão Geral', icon: LayoutDashboard },
-    { id: 'operacao' as const, label: 'Gestão de Pedidos', icon: ListTodo },
-    { id: 'feedbacks' as const, label: 'Avaliações de Clientes', icon: MessageSquare },
+    { id: 'dashboard' as const, label: t.menu.overview, icon: LayoutDashboard },
+    { id: 'operacao' as const, label: t.menu.management, icon: ListTodo },
+    { id: 'feedbacks' as const, label: t.menu.reviews, icon: MessageSquare },
   ];
 
   return (
@@ -207,7 +228,7 @@ export default function Dashboard() {
         <div className="p-4 border-t dark:border-white/5">
           <button onClick={handleLogout} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-red-500 transition-all ${!isSidebarOpen && 'justify-center'}`}>
             <LogOut size={20} />
-            {isSidebarOpen && <span className="font-bold text-sm">Sair do Sistema</span>}
+            {isSidebarOpen && <span className="font-bold text-sm">{t.menu.logout}</span>}
           </button>
         </div>
       </aside>
@@ -226,28 +247,27 @@ export default function Dashboard() {
               </button>
               <div>
                 <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
-                  {/* Títulos simplificados para cada tela */}
-                  {activeMenu === 'dashboard' ? 'Visão Geral da Loja' : activeMenu === 'operacao' ? 'Acompanhamento de Pedidos' : 'Avaliações e Análise de IA'}
+                  {activeMenu === 'dashboard' ? t.header.overview : activeMenu === 'operacao' ? t.header.orderTracking : t.header.reviews}
                 </h1>
                 <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mt-1 flex items-center gap-2">
-                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Sistema atualizado em tempo real
+                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> {t.header.realTime}
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
               <div className="bg-white dark:bg-white/5 p-1.5 rounded-2xl border dark:border-white/10 flex gap-1 shadow-sm">
-                {/* Textos dos botões de data mais intuitivos */}
                 {(['hoje', '7dias', 'mensal'] as const).map((opt) => (
                   <button
                     key={opt}
                     onClick={() => setPeriodo(opt)}
                     className={`px-5 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all ${periodo === opt ? 'bg-[#EA1D2C] text-white shadow-lg' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'}`}
                   >
-                    {opt === 'hoje' ? 'Hoje' : opt === '7dias' ? '7 Dias' : '30 Dias'}
+                    {opt === 'hoje' ? (lang === 'en' ? 'Today' : 'Hoje') : opt === '7dias' ? (lang === 'en' ? '7 Days' : '7 Dias') : (lang === 'en' ? '30 Days' : '30 Dias')}
                   </button>
                 ))}
               </div>
+              <LanguageToggle /> {/* ✅ BOTÃO DE IDIOMA INCLUÍDO */}
               <ThemeToggle />
               <SimularPedidoButton />
             </div>
@@ -277,10 +297,10 @@ export default function Dashboard() {
                   <ExportButton targetId="area-relatorio" />
                   <button 
                     onClick={() => setIsMetaModalOpen(true)} 
-                    className="group px-6 py-3.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all flex items-center gap-3 shadow-sm"
+                    className="group px-6 py-3.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-[1.02] transition-all flex items-center gap-3 shadow-sm"
                   >
                     <Target size={16} className="text-[#EA1D2C]" />
-                    Definir Meta Anual
+                    {lang === 'en' ? "Set Annual Target" : "Definir Meta Anual"}
                   </button>
                   <DashboardSettings config={config} setConfig={setConfig} />
                 </div>

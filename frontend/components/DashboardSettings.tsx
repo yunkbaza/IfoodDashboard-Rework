@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Settings2, X, ChevronUp, ChevronDown } from "lucide-react";
+import { useLanguage } from "../contexts/LanguageContext"; // ✅ IMPORTADO
 
 export type ChartSize = 'P' | 'M' | 'G';
 
@@ -11,7 +12,7 @@ export interface DashboardConfig {
   showBairros: boolean; bairrosSize: ChartSize;
   showHorarios: boolean; horariosSize: ChartSize;
   showPagamentos: boolean; pagamentosSize: ChartSize;
-  chartOrder: string[]; // ✅ NOVO: Array que guarda a ordem dos gráficos
+  chartOrder: string[]; 
 }
 
 interface Props {
@@ -21,14 +22,21 @@ interface Props {
 
 export default function DashboardSettings({ config, setConfig }: Props) {
   const [isOpen, setIsOpen] = useState(false);
+  const { lang } = useLanguage(); // ✅ PEGANDO O IDIOMA ATUAL
 
-  // Mapeamento de IDs para nomes visuais
+  // ✅ DICIONÁRIO DINÂMICO PARA OS NOMES DOS GRÁFICOS
   const labels: Record<string, string> = {
-    sales: "Evolução de Vendas",
-    topProducts: "Top Produtos",
-    bairros: "Regiões de Entrega",
-    horarios: "Fluxo de Horários",
-    pagamentos: "Métodos de Pagamento"
+    sales: lang === 'en' ? "Sales Trend" : "Evolução de Vendas",
+    topProducts: lang === 'en' ? "Top Products" : "Top Produtos",
+    bairros: lang === 'en' ? "Delivery Regions" : "Regiões de Entrega",
+    horarios: lang === 'en' ? "Peak Hours" : "Fluxo de Horários",
+    pagamentos: lang === 'en' ? "Payment Methods" : "Métodos de Pagamento"
+  };
+
+  const sizeLabels: Record<ChartSize, string> = {
+    P: "S",
+    M: "M",
+    G: "L"
   };
 
   const toggle = (id: string) => {
@@ -62,7 +70,7 @@ export default function DashboardSettings({ config, setConfig }: Props) {
         className="group px-6 py-3.5 bg-white dark:bg-white/5 border dark:border-white/10 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 dark:hover:bg-white/10 transition-all shadow-sm flex items-center gap-3"
       >
         <Settings2 size={16} className={`transition-transform duration-500 ${isOpen ? 'rotate-180 text-[#EA1D2C]' : 'text-slate-400'}`} />
-        <span className="dark:text-white">Layout</span>
+        <span className="dark:text-white">{lang === 'en' ? "Grid Layout" : "Layout da Grade"}</span>
       </button>
 
       {isOpen && (
@@ -70,7 +78,9 @@ export default function DashboardSettings({ config, setConfig }: Props) {
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
           <div className="absolute bottom-full right-0 mb-4 w-[340px] bg-white/95 dark:bg-[#111113]/95 backdrop-blur-3xl border border-slate-200 dark:border-white/10 rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.4)] z-50 p-6 animate-in fade-in zoom-in slide-in-from-bottom-4 duration-300">
             <div className="flex justify-between items-center mb-6">
-              <span className="text-[10px] font-black text-[#EA1D2C] uppercase tracking-[0.4em]">Personalizar Grade</span>
+              <span className="text-[10px] font-black text-[#EA1D2C] uppercase tracking-[0.4em]">
+                {lang === 'en' ? "Customize Grid" : "Personalizar Grade"}
+              </span>
               <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-red-500 transition-colors"><X size={18}/></button>
             </div>
 
@@ -109,7 +119,7 @@ export default function DashboardSettings({ config, setConfig }: Props) {
                               config[sizeKey] === s ? 'bg-[#EA1D2C] text-white shadow-md' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'
                             }`}
                           >
-                            {s}
+                            {sizeLabels[s]}
                           </button>
                         ))}
                       </div>

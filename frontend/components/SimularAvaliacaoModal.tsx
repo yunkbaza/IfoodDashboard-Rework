@@ -17,7 +17,8 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
     cliente: "",
     nota: 5,
     texto: "",
-    sentimento: "positivo"
+    // We keep the internal state in Portuguese to match the backend expectations
+    sentimento: "positivo" 
   });
 
   if (!isOpen) return null;
@@ -27,15 +28,15 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
     setLoading(true);
     try {
       await createAvaliacao(form);
-      toast.success("Avaliação inserida na base de dados!");
+      toast.success("Review inserted into the database!");
       onSuccess();
       onClose();
       setForm({ cliente: "", nota: 5, texto: "", sentimento: "positivo" });
     } catch (err: unknown) {
       if (err instanceof Error) {
-        toast.error(err.message || "Erro na validação do servidor.");
+        toast.error(err.message || "Server validation error.");
       } else {
-        toast.error("Erro inesperado ao conectar com a API.");
+        toast.error("Unexpected error connecting to the API.");
       }
     } finally {
       setLoading(false);
@@ -51,12 +52,19 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
     setForm({ ...form, nota: selectedStar, sentimento: newSentimento });
   };
 
+  // Helper function to translate feeling to UI
+  const getFeelingLabel = (sentimento: string) => {
+    if (sentimento === 'positivo') return 'Positive';
+    if (sentimento === 'negativo') return 'Negative';
+    return 'Neutral';
+  };
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-[#0A0A0B]/80 backdrop-blur-xl animate-in fade-in duration-300">
       
       <div className="bg-white dark:bg-[#111113] w-full max-w-lg rounded-[48px] border border-slate-200 dark:border-white/10 shadow-[0_32px_128px_-12px_rgba(0,0,0,0.5)] overflow-hidden relative animate-in zoom-in-95 slide-in-from-bottom-10 duration-500">
         
-        {/* Header Profissional */}
+        {/* Professional Header */}
         <div className="p-8 pb-6 flex justify-between items-start border-b dark:border-white/5">
           <div className="flex items-center gap-4">
             <div className="bg-[#EA1D2C]/10 p-3.5 rounded-3xl text-[#EA1D2C]">
@@ -64,10 +72,10 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
             </div>
             <div>
               <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">
-                Inserir Avaliação
+                Submit Review
               </h2>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-1.5">
-                Módulo de Teste de IA
+                AI Testing Module
               </p>
             </div>
           </div>
@@ -78,25 +86,25 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
           
-          {/* Nome Input */}
+          {/* Name Input */}
           <div className="space-y-2.5">
             <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest ml-1">
-              Identificação do Cliente
+              Customer Identification
             </label>
             <input
               required
               value={form.cliente}
               onChange={e => setForm({...form, cliente: e.target.value})}
               className="w-full bg-slate-50 dark:bg-[#0A0A0B] border border-slate-200 dark:border-white/5 rounded-2xl p-4 text-sm font-bold text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-[#EA1D2C]/50 focus:border-[#EA1D2C] outline-none transition-all"
-              placeholder="Ex: Nome Sobrenome"
+              placeholder="e.g. John Doe"
             />
           </div>
 
-          {/* Sistema de Estrelas */}
+          {/* Star System */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between ml-1">
               <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest">
-                Nível de Satisfação
+                Satisfaction Level
               </label>
               {/* Dynamic Feeling Indicator */}
               <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
@@ -104,7 +112,7 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
                 form.sentimento === 'negativo' ? 'bg-red-500/10 text-red-500' :
                 'bg-amber-500/10 text-amber-500'
               }`}>
-                {form.sentimento}
+                {getFeelingLabel(form.sentimento)}
               </span>
             </div>
             
@@ -126,10 +134,10 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
             </div>
           </div>
 
-          {/* Comentário Textarea */}
+          {/* Comment Textarea */}
           <div className="space-y-2.5">
             <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest ml-1">
-              Relato do Cliente
+              Customer Feedback
             </label>
             <textarea
               required
@@ -137,7 +145,7 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
               value={form.texto}
               onChange={e => setForm({...form, texto: e.target.value})}
               className="w-full bg-slate-50 dark:bg-[#0A0A0B] border border-slate-200 dark:border-white/5 rounded-2xl p-4 text-sm font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-[#EA1D2C]/50 focus:border-[#EA1D2C] outline-none transition-all resize-none leading-relaxed"
-              placeholder="Descreva a experiência com o pedido para alimentar o motor de Inteligência Artificial..."
+              placeholder="Describe the order experience to feed the Artificial Intelligence engine..."
             />
           </div>
 
@@ -150,12 +158,12 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
               {loading ? (
                 <>
                   <Loader2 size={18} className="animate-spin text-[#EA1D2C]" />
-                  <span>Transmitindo...</span>
+                  <span>Transmitting...</span>
                 </>
               ) : (
                 <>
                   <Send size={16} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform text-[#EA1D2C]" /> 
-                  Submeter ao Sistema
+                  Submit to System
                 </>
               )}
             </button>
