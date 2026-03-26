@@ -1,79 +1,146 @@
 "use client";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
-interface DailySalesData {
-  data: string;  
-  valor: number; 
+import { 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  Tooltip, 
+  CartesianGrid 
+} from 'recharts';
+import { TrendingUp, ShieldCheck } from "lucide-react";
+
+interface SalesChartProps {
+  data: { data: string; valor: number }[];
 }
 
-export default function SalesChart({ data }: { data: DailySalesData[] }) {
+export default function SalesChart({ data }: SalesChartProps) {
   return (
-    <div className="h-full w-full flex flex-col">
-      <h2 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight mb-6 transition-colors">
-        Evolução do Faturamento
-      </h2>
+    // ✅ ESTRUTURA ELÁSTICA: Garante que o gráfico ocupe todo o card sem esticar
+    <div className="flex-1 flex flex-col min-h-0 w-full group">
       
-      <div className="flex-1 w-full min-h-0">
+      {/* Cabeçalho do Gráfico - shrink-0 impede que o texto seja cortado */}
+      <div className="mb-6 shrink-0">
+        <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] mb-1">
+          Performance Financeira
+        </h3>
+        <div className="flex items-center gap-2">
+          <div className="p-2 rounded-lg bg-[#EA1D2C]/10 text-[#EA1D2C]">
+            <TrendingUp size={20} />
+          </div>
+          <p className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">
+            Evolução de Vendas
+          </p>
+        </div>
+      </div>
+
+      {/* Container do Recharts */}
+      <div className="flex-1 min-h-0 w-full relative">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart 
+          <AreaChart 
             data={data} 
-            // Ajustei as margens para o gráfico respirar e não ficar espremido nas bordas
-            margin={{ top: 10, right: 20, left: 10, bottom: 10 }}
+            // ✅ MARGENS AJUSTADAS: Evita que o último ponto ou o valor em Reais sejam cortados
+            margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
           >
+            <defs>
+              <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#EA1D2C" stopOpacity={0.4}/>
+                <stop offset="95%" stopColor="#EA1D2C" stopOpacity={0}/>
+              </linearGradient>
+            </defs>
+
             <CartesianGrid 
-              strokeDasharray="3 3" 
+              strokeDasharray="0" 
               vertical={false} 
-              stroke="#2C2C2E" 
-              opacity={0.1} 
+              stroke="currentColor" 
+              className="text-slate-100 dark:text-white/5" 
             />
-            
+
             <XAxis 
               dataKey="data" 
-              stroke="#8E8E93" 
-              fontSize={11} 
-              tickLine={false} 
               axisLine={false} 
-              dy={10} 
+              tickLine={false} 
+              tick={{ fill: '#64748b', fontSize: 10, fontWeight: 800 }} 
+              dy={15}
             />
-            
+
             <YAxis 
-              stroke="#8E8E93" 
-              fontSize={11} 
-              tickLine={false} 
               axisLine={false} 
-              tickFormatter={(value) => `R$${value}`} 
-              // Removi o dx negativo para a label não fugir do gráfico
-              width={60}
+              tickLine={false} 
+              tick={{ fill: '#64748b', fontSize: 10, fontWeight: 500 }}
+              tickFormatter={(value) => `R$ ${value}`}
+              width={65} // Garante espaço fixo para o "R$ XXXX"
             />
-            
+
             <Tooltip 
-              contentStyle={{ 
-                backgroundColor: '#1C1C1E', 
-                borderRadius: '16px', 
-                border: '1px solid #2C2C2E', 
-                boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.5)',
-                color: '#fff',
-                padding: '12px'
-              }}
-              itemStyle={{ color: '#EA1D2C', fontWeight: 'bold' }}
               cursor={{ stroke: '#EA1D2C', strokeWidth: 1, strokeDasharray: '4 4' }}
+              content={({ active, payload, label }) => {
+                if (active && payload && payload.length) {
+                  return (
+                    <div className="bg-white/95 dark:bg-[#111113]/95 backdrop-blur-xl p-5 rounded-3xl shadow-2xl border border-slate-100 dark:border-white/10 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-200">
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                        Receita Diária
+                      </p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 rounded-full bg-[#EA1D2C] animate-pulse" />
+                        <p className="text-sm font-black dark:text-white uppercase tracking-tight">
+                          {label}
+                        </p>
+                      </div>
+                      <p className="text-2xl font-black text-[#EA1D2C] tabular-nums">
+                        R$ {payload[0].value?.toLocaleString('pt-BR', { 
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2 
+                        })}
+                      </p>
+                    </div>
+                  );
+                }
+                return null;
+              }}
             />
-            
-            <Line 
+
+            <Area 
               type="monotone" 
               dataKey="valor" 
-              name="Faturamento"
               stroke="#EA1D2C" 
-              strokeWidth={4} 
-              // Restaurado o visual premium dos pontos
-              dot={{ r: 5, fill: '#1C1C1E', stroke: '#EA1D2C', strokeWidth: 2 }} 
-              activeDot={{ r: 8, fill: '#EA1D2C', stroke: '#fff', strokeWidth: 2 }} 
-              // Sombra suave na linha para dar profundidade
-              style={{ filter: "drop-shadow(0px 4px 8px rgba(234, 29, 44, 0.3))" }}
+              strokeWidth={4}
+              fillOpacity={1} 
+              fill="url(#colorSales)" 
+              activeDot={{ 
+                r: 6, 
+                fill: "#EA1D2C", 
+                stroke: "#fff", 
+                strokeWidth: 3,
+              }}
+              dot={{ 
+                r: 3, 
+                fill: "#EA1D2C", 
+                strokeWidth: 0,
+                fillOpacity: 0.4
+              }}
+              animationDuration={2000}
+              animationEasing="ease-in-out"
             />
-          </LineChart>
+          </AreaChart>
         </ResponsiveContainer>
       </div>
+
+      {/* Footer Fixo: Acompanha o design dos outros gráficos */}
+      <div className="mt-4 flex justify-between items-center shrink-0">
+        <div className="flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-[#EA1D2C]" />
+          <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+            Faturamento Bruto
+          </p>
+        </div>
+        <div className="px-3 py-1 bg-slate-50 dark:bg-[#1C1C1E] rounded-lg border dark:border-white/5 flex items-center gap-1">
+          <ShieldCheck size={12} className="text-emerald-500" />
+          <span className="text-[8px] font-black text-slate-500 uppercase tracking-tight">Cálculo Exato</span>
+        </div>
+      </div>
+      
     </div>
   );
 }

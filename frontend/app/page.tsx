@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { toast } from "sonner"; // ✅ IMPORTADO: Para as notificações elegantes
+import { toast } from "sonner";
 import { 
   getDashboardStats, getFinanceiro, getVendasDiarias, 
   getTopProdutos, getStatsBairros, getStatsHorarios, getStatsPagamentos 
@@ -11,7 +11,7 @@ import {
 
 import { 
   DollarSign, ShoppingBag, TrendingUp, Percent, Loader2, 
-  LayoutDashboard, ListTodo, MessageSquare, LogOut, Target
+  LayoutDashboard, ListTodo, MessageSquare, LogOut, Target, Menu, ChevronLeft
 } from "lucide-react";
 
 // Componentes
@@ -26,7 +26,9 @@ import DashboardSettings, { DashboardConfig, ChartSize } from "../components/Das
 import KanbanBoard from "../components/KanbanBoard";
 import FeedbackView from "../components/FeedbackView"; 
 import MetaAnualModal from "../components/MetaAnualModal";
-import ExportButton from "../components/ExportButton"; // ✅ IMPORTADO
+import ExportButton from "../components/ExportButton";
+
+type MenuOption = 'dashboard' | 'operacao' | 'feedbacks';
 
 interface DashboardData {
   stats: { faturamento_total: number; total_pedidos: number; ticket_medio: number };
@@ -40,17 +42,16 @@ interface DashboardData {
 
 export default function Dashboard() {
   const router = useRouter();
-  const [activeMenu, setActiveMenu] = useState<'dashboard' | 'operacao' | 'feedbacks'>('dashboard');
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) router.push("/login");
-  }, [router]);
-
+  const [activeMenu, setActiveMenu] = useState<MenuOption>('dashboard');
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  
   const [config, setConfig] = useState<DashboardConfig>({
-    showSales: true, salesSize: 'M', showTopProducts: true, topProductsSize: 'P',
-    showBairros: true, bairrosSize: 'M', showPagamentos: true, pagamentosSize: 'P',
+    showSales: true, salesSize: 'M', 
+    showTopProducts: true, topProductsSize: 'P',
+    showBairros: true, bairrosSize: 'M', 
+    showPagamentos: true, pagamentosSize: 'P',
     showHorarios: true, horariosSize: 'G',
+    chartOrder: ['sales', 'topProducts', 'bairros', 'pagamentos', 'horarios']
   });
 
   const [data, setData] = useState<DashboardData | null>(null);
@@ -60,7 +61,9 @@ export default function Dashboard() {
   const [isMetaModalOpen, setIsMetaModalOpen] = useState(false);
 
   const sizeMap: Record<ChartSize, string> = {
-    P: "lg:col-span-1", M: "lg:col-span-2", G: "lg:col-span-3"
+    P: "lg:col-span-1", 
+    M: "lg:col-span-2", 
+    G: "lg:col-span-3"
   };
 
   const loadAllData = useCallback(async () => {
@@ -73,6 +76,7 @@ export default function Dashboard() {
       setData({ stats, financeiro, vendasDiarias, topProdutos, bairros, horarios, pagamentos });
     } catch (error) {
       console.error("Erro na sincronização:", error);
+      toast.error("Erro ao sincronizar dados com o servidor.");
     } finally {
       setLoading(false);
       setIsFiltering(false);
@@ -80,10 +84,11 @@ export default function Dashboard() {
   }, [periodo]);
 
   useEffect(() => {
-    loadAllData();
-  }, [loadAllData]); 
+    const token = localStorage.getItem("token");
+    if (!token) router.push("/login");
+    else loadAllData();
+  }, [router, loadAllData]);
 
-  // ✅ INCLUÍDO: Lógica de Notificações via WebSocket
   useEffect(() => {
     const wsUrl = "ws://127.0.0.1:8000/ws/pedidos"; 
     const socket = new WebSocket(wsUrl);
@@ -91,14 +96,9 @@ export default function Dashboard() {
     socket.onmessage = (event) => {
       const socketData = JSON.parse(event.data);
       if (socketData.action === "new_order") {
-        toast.success(`Novo Pedido Recebido!`, {
-          description: `ID: ${socketData.id_pedido}`,
-        });
+        toast.success(`Novo Pedido Recebido!`, { description: `ID: ${socketData.id_pedido}` });
         loadAllData(); 
       } else if (socketData.action === "update_status") {
-        toast.info(`Status Atualizado`, {
-          description: `O pedido ${socketData.id_pedido} mudou de estado.`,
-        });
         loadAllData();
       }
     };
@@ -112,136 +112,183 @@ export default function Dashboard() {
     router.push("/login");
   };
 
+  const renderChart = (chartId: string) => {
+    switch (chartId) {
+      case 'sales':
+        return config.showSales && (
+          <div key="sales" className={`${sizeMap[config.salesSize]} bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl flex flex-col min-h-[400px]`}>
+            <SalesChart data={data!.vendasDiarias} />
+          </div>
+        );
+      case 'topProducts':
+        return config.showTopProducts && (
+          <div key="topProducts" className={`${sizeMap[config.topProductsSize]} bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl flex flex-col min-h-[400px]`}>
+            <TopProducts data={data!.topProdutos} />
+          </div>
+        );
+      case 'bairros':
+        return config.showBairros && (
+          <div key="bairros" className={`${sizeMap[config.bairrosSize]} bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl flex flex-col min-h-[400px]`}>
+            <BairrosChart data={data!.bairros} />
+          </div>
+        );
+      case 'pagamentos':
+        return config.showPagamentos && (
+          <div key="pagamentos" className={`${sizeMap[config.pagamentosSize]} bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl flex flex-col min-h-[400px]`}>
+            <PagamentosChart data={data!.pagamentos} />
+          </div>
+        );
+      case 'horarios':
+        return config.showHorarios && (
+          <div key="horarios" className={`${sizeMap[config.horariosSize]} bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl flex flex-col min-h-[400px]`}>
+            <HorariosChart data={data!.horarios} />
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
   if (loading || !data) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-[#111111] flex flex-col items-center justify-center gap-6">
+      <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center gap-6">
         <div className="relative w-32 h-12">
             <Image src="/IfoodVetor.svg" alt="iFood" fill className="object-contain" priority />
         </div>
         <Loader2 className="animate-spin text-[#EA1D2C]" size={32} />
+        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">Atualizando Painel da Loja</p>
       </div>
     );
   }
 
+  // Nomes mais claros para os indicadores de resultado
   const cards = [
-    { title: "Faturamento", value: `R$ ${data.stats.faturamento_total.toLocaleString('pt-BR')}`, icon: DollarSign, color: "text-emerald-500 bg-emerald-500/10" },
-    { title: "Lucro Líquido", value: `R$ ${data.financeiro.lucro_liquido.toLocaleString('pt-BR')}`, icon: TrendingUp, color: "text-blue-500 bg-blue-500/10" },
-    { title: "Pedidos Entregues", value: data.stats.total_pedidos, icon: ShoppingBag, color: "text-purple-500 bg-purple-500/10" },
-    { title: "Margem de Lucro", value: data.financeiro.margem_percentual, icon: Percent, color: "text-[#EA1D2C] bg-[#EA1D2C]/10" },
+    { title: "Faturamento Bruto", value: `R$ ${data.stats.faturamento_total.toLocaleString('pt-BR')}`, icon: DollarSign, color: "text-emerald-500", glow: "shadow-emerald-500/10" },
+    { title: "Lucro Estimado", value: `R$ ${data.financeiro.lucro_liquido.toLocaleString('pt-BR')}`, icon: TrendingUp, color: "text-blue-500", glow: "shadow-blue-500/10" },
+    { title: "Total de Pedidos", value: data.stats.total_pedidos, icon: ShoppingBag, color: "text-purple-500", glow: "shadow-purple-500/10" },
+    { title: "Margem de Lucro", value: data.financeiro.margem_percentual, icon: Percent, color: "text-[#EA1D2C]", glow: "shadow-red-500/10" },
+  ];
+
+  // Navegação simplificada para facilitar o uso no dia a dia
+  const navItems = [
+    { id: 'dashboard' as const, label: 'Visão Geral', icon: LayoutDashboard },
+    { id: 'operacao' as const, label: 'Gestão de Pedidos', icon: ListTodo },
+    { id: 'feedbacks' as const, label: 'Avaliações de Clientes', icon: MessageSquare },
   ];
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-[#111111] overflow-hidden font-sans transition-colors duration-300">
+    <div className="flex h-screen bg-[#F8FAFC] dark:bg-[#0A0A0B] overflow-hidden font-sans transition-colors duration-500">
       
-      <aside className="w-20 lg:w-64 bg-white dark:bg-[#1C1C1E] border-r border-slate-200 dark:border-[#2C2C2E] flex flex-col justify-between shrink-0 z-20 transition-all duration-300">
-        <div>
-          <div className="h-24 flex items-center justify-center lg:justify-start lg:px-8 border-b border-slate-100 dark:border-[#2C2C2E]">
-            <div className="relative w-20 h-9">
-                <Image src="/IfoodVetor.svg" alt="iFood Logo" fill className="object-contain" priority />
-            </div>
+      {/* SIDEBAR */}
+      <aside className={`bg-white dark:bg-[#111113] border-r border-slate-200 dark:border-white/5 flex flex-col transition-all duration-500 ease-in-out shrink-0 z-30 ${isSidebarOpen ? 'w-72' : 'w-24'}`}>
+        <div className="h-24 flex items-center px-6 border-b dark:border-white/5">
+          <div className="relative w-10 h-10 shrink-0">
+            <Image src="/IfoodVetor.svg" alt="iFood Logo" fill className="object-contain" priority />
           </div>
-          
-          <nav className="p-4 space-y-2 mt-4">
-            <button onClick={() => setActiveMenu('dashboard')} className={`w-full flex items-center justify-center lg:justify-start gap-4 px-4 py-3.5 rounded-2xl transition-all font-bold text-sm ${activeMenu === 'dashboard' ? 'bg-[#EA1D2C]/10 text-[#EA1D2C]' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-[#242426]'}`}>
-              <LayoutDashboard size={20} /> <span className="hidden lg:block">Resumo da Loja</span>
-            </button>
-            <button onClick={() => setActiveMenu('operacao')} className={`w-full flex items-center justify-center lg:justify-start gap-4 px-4 py-3.5 rounded-2xl transition-all font-bold text-sm ${activeMenu === 'operacao' ? 'bg-[#EA1D2C]/10 text-[#EA1D2C]' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-[#242426]'}`}>
-              <ListTodo size={20} /> <span className="hidden lg:block">Tela da Cozinha</span>
-            </button>
-            <button onClick={() => setActiveMenu('feedbacks')} className={`w-full flex items-center justify-center lg:justify-start gap-4 px-4 py-3.5 rounded-2xl transition-all font-bold text-sm ${activeMenu === 'feedbacks' ? 'bg-[#EA1D2C]/10 text-[#EA1D2C]' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-[#242426]'}`}>
-              <MessageSquare size={20} /> <span className="hidden lg:block">Opinião dos Clientes</span>
-            </button>
-          </nav>
+          {isSidebarOpen && <span className="ml-3 font-black text-xl tracking-tighter dark:text-white uppercase">Dashboard Pro</span>}
         </div>
 
-        <div className="p-4 border-t border-slate-100 dark:border-[#2C2C2E]">
-           <button onClick={handleLogout} className="w-full flex items-center justify-center lg:justify-start gap-4 px-4 py-3.5 rounded-2xl transition-all font-bold text-sm text-slate-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10">
-              <LogOut size={20} /> <span className="hidden lg:block">Sair do Sistema</span>
+        <nav className="p-4 space-y-3 mt-4 flex-1">
+          {navItems.map((item) => (
+            <button 
+              key={item.id}
+              onClick={() => setActiveMenu(item.id)}
+              className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all group relative ${activeMenu === item.id ? 'bg-[#EA1D2C] text-white shadow-xl shadow-red-500/20' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}
+            >
+              <item.icon size={22} strokeWidth={activeMenu === item.id ? 2.5 : 2} />
+              {isSidebarOpen && <span className="font-bold text-sm tracking-wide">{item.label}</span>}
+              {!isSidebarOpen && activeMenu === item.id && (
+                <div className="absolute left-0 w-1 h-8 bg-white rounded-r-full" />
+              )}
             </button>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t dark:border-white/5">
+          <button onClick={handleLogout} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-red-500 transition-all ${!isSidebarOpen && 'justify-center'}`}>
+            <LogOut size={20} />
+            {isSidebarOpen && <span className="font-bold text-sm">Sair do Sistema</span>}
+          </button>
         </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto relative">
-        <div className="max-w-7xl mx-auto p-4 md:p-8">
+      {/* ÁREA PRINCIPAL */}
+      <main className="flex-1 overflow-y-auto relative custom-scrollbar">
+        <div className="max-w-[1600px] mx-auto p-6 lg:p-10">
           
-          <header className="mb-10 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
-            <div>
-              <h1 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                {activeMenu === 'dashboard' && 'Desempenho Financeiro'}
-                {activeMenu === 'operacao' && 'Acompanhamento de Pedidos'}
-                {activeMenu === 'feedbacks' && 'Avaliações e Dicas (IA)'}
-              </h1>
-              <p className="text-slate-500 dark:text-[#8E8E93] text-[10px] font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
-                <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Sistema Ativo
-              </p>
+          <header className="mb-12 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+            <div className="flex items-center gap-4">
+              <button 
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                className="p-3 rounded-xl bg-white dark:bg-white/5 border dark:border-white/10 hover:scale-105 transition-transform"
+              >
+                {isSidebarOpen ? <ChevronLeft size={20} /> : <Menu size={20} />}
+              </button>
+              <div>
+                <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
+                  {/* Títulos simplificados para cada tela */}
+                  {activeMenu === 'dashboard' ? 'Visão Geral da Loja' : activeMenu === 'operacao' ? 'Acompanhamento de Pedidos' : 'Avaliações e Análise de IA'}
+                </h1>
+                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mt-1 flex items-center gap-2">
+                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> Sistema atualizado em tempo real
+                </p>
+              </div>
             </div>
-            
-            <div className="flex flex-wrap items-center justify-start xl:justify-end gap-3 w-full xl:w-auto">
-              
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center bg-white dark:bg-[#1C1C1E] p-1 rounded-xl border border-slate-200 dark:border-[#2C2C2E] shadow-sm">
-                  {(['hoje', '7dias', 'mensal'] as const).map((opt) => (
-                    <button
-                      key={opt}
-                      onClick={() => setPeriodo(opt)}
-                      disabled={isFiltering}
-                      className={`px-4 py-2 text-xs font-bold rounded-lg transition-all uppercase ${periodo === opt ? 'bg-[#EA1D2C] text-white shadow-md shadow-red-500/20' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'}`}
-                    >
-                      {opt === '7dias' ? '7 Dias' : opt === 'mensal' ? 'Mensal' : opt}
-                    </button>
-                  ))}
-                </div>
 
-                {activeMenu === 'dashboard' && (
-                  <>
-                    {/* ✅ INCLUÍDO: O botão de exportar está agora na interface */}
-                    <ExportButton targetId="area-relatorio" />
-
-                    <button onClick={() => setIsMetaModalOpen(true)} className="flex items-center gap-2 bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-2 rounded-xl text-xs font-bold uppercase hover:opacity-80 transition-opacity shadow-sm">
-                      <Target size={16} /> Meta Anual
-                    </button>
-                    <DashboardSettings config={config} setConfig={setConfig} />
-                  </>
-                )}
+            <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
+              <div className="bg-white dark:bg-white/5 p-1.5 rounded-2xl border dark:border-white/10 flex gap-1 shadow-sm">
+                {/* Textos dos botões de data mais intuitivos */}
+                {(['hoje', '7dias', 'mensal'] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => setPeriodo(opt)}
+                    className={`px-5 py-2.5 text-[10px] font-black uppercase rounded-xl transition-all ${periodo === opt ? 'bg-[#EA1D2C] text-white shadow-lg' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'}`}
+                  >
+                    {opt === 'hoje' ? 'Hoje' : opt === '7dias' ? '7 Dias' : '30 Dias'}
+                  </button>
+                ))}
               </div>
-              
-              <div className="flex items-center gap-3 xl:border-l xl:border-slate-200 xl:dark:border-[#2C2C2E] xl:pl-3">
-                <ThemeToggle />
-                <SimularPedidoButton />
-              </div>
-              
+              <ThemeToggle />
+              <SimularPedidoButton />
             </div>
           </header>
 
-          {/* ✅ INCLUÍDO: ID "area-relatorio" adicionado para a câmara do PDF saber o que capturar */}
-          <div id="area-relatorio" className={`transition-opacity duration-500 ${isFiltering ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+          <div id="area-relatorio" className={`transition-all duration-700 ${isFiltering ? 'blur-sm opacity-50' : 'opacity-100'}`}>
             
             {activeMenu === 'dashboard' && (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
-                  {cards.map((card, index) => (
-                    <div key={index} className="bg-white dark:bg-[#1C1C1E] p-6 rounded-3xl border border-slate-100 dark:border-[#2C2C2E] shadow-sm hover:border-slate-200 dark:hover:border-[#3C3C3E] transition-all">
-                      <div className="flex justify-between items-center mb-4">
-                        <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">{card.title}</span>
-                        <div className={`${card.color} p-2.5 rounded-xl`}><card.icon size={18} /></div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+                  {cards.map((card, idx) => (
+                    <div key={idx} className={`bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl ${card.glow} hover:translate-y-[-4px] transition-all duration-300 group`}>
+                      <div className="flex justify-between items-center mb-6">
+                        <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">{card.title}</span>
+                        <div className={`p-3 rounded-2xl bg-slate-50 dark:bg-white/5 ${card.color} group-hover:scale-110 transition-transform`}><card.icon size={20} /></div>
                       </div>
-                      <div className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{card.value}</div>
+                      <div className="text-3xl font-black tracking-tighter dark:text-white">{card.value}</div>
                     </div>
                   ))}
                 </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-                  {config.showSales && <div className={`${sizeMap[config.salesSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] min-h-75 shadow-sm`}><SalesChart data={data.vendasDiarias} /></div>}
-                  {config.showTopProducts && <div className={`${sizeMap[config.topProductsSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] min-h-75 shadow-sm`}><TopProducts data={data.topProdutos} /></div>}
-                  {config.showBairros && <div className={`${sizeMap[config.bairrosSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] min-h-75 shadow-sm`}><BairrosChart data={data.bairros} /></div>}
-                  {config.showPagamentos && <div className={`${sizeMap[config.pagamentosSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] min-h-75 shadow-sm`}><PagamentosChart data={data.pagamentos} /></div>}
-                  {config.showHorarios && <div className={`${sizeMap[config.horariosSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] min-h-75 shadow-sm`}><HorariosChart data={data.horarios} /></div>}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 auto-rows-fr">
+                  {config.chartOrder.map((chartId) => renderChart(chartId))}
+                </div>
+
+                <div className="mt-10 flex justify-end items-center gap-4">
+                  <ExportButton targetId="area-relatorio" />
+                  <button 
+                    onClick={() => setIsMetaModalOpen(true)} 
+                    className="group px-6 py-3.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all flex items-center gap-3 shadow-sm"
+                  >
+                    <Target size={16} className="text-[#EA1D2C]" />
+                    Definir Meta Anual
+                  </button>
+                  <DashboardSettings config={config} setConfig={setConfig} />
                 </div>
               </>
             )}
 
             {activeMenu === 'operacao' && (
-              <div className="bg-slate-100/50 dark:bg-[#111111] p-2 rounded-4xl min-h-[70vh]">
+              <div className="bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl min-h-[75vh]">
                 <KanbanBoard periodo={periodo} />
               </div>
             )}
@@ -255,7 +302,6 @@ export default function Dashboard() {
       </main>
 
       <MetaAnualModal isOpen={isMetaModalOpen} onClose={() => setIsMetaModalOpen(false)} />
-
     </div>
   );
 }

@@ -1,13 +1,13 @@
 import os
 import json
 import requests
-import re
+import random
 from datetime import datetime, timedelta
 from typing import List
 
 # FastAPI, WebSockets e Segurança
-from fastapi import FastAPI, Depends, Query, HTTPException, status, WebSocket, WebSocketDisconnect
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer # ✅ CADEADO IMPORTADO AQUI
+from fastapi import FastAPI, Depends, Query, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer 
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import func, cast, Date, desc
@@ -32,20 +32,19 @@ app = FastAPI(title="iFood Dashboard Pro API", version="3.1.0")
 # ==========================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=["*"], # Em produção, substitua pelo link da Vercel
     allow_credentials=True,
     allow_methods=["*"], 
     allow_headers=["*"], 
 )
 
 # ==========================================
-# 🔐 O CADEADO (NOVO)
+# 🔐 O CADEADO (OAuth2)
 # ==========================================
-# Define onde o frontend deve ir para "carimbar" o acesso
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 # ==========================================
-# 🔌 SISTEMA DE WEBSOCKET (LIVE ORDERS)
+# 🔌 SISTEMA DE WEBSOCKET (LIVE UPDATES)
 # ==========================================
 class ConnectionManager:
     def __init__(self):
@@ -78,7 +77,7 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 # ==========================================
-# 📊 SCHEMAS E AUXILIARES
+# 📊 SCHEMAS DE DADOS
 # ==========================================
 class StatusUpdate(BaseModel):
     status: str
@@ -92,37 +91,43 @@ class AvaliacaoCreate(BaseModel):
     texto: str
     sentimento: str
 
-def apply_date_filter(query, periodo: str):
-    hoje = datetime.now().date()
-    if periodo == 'hoje':
-        return query.filter(cast(Pedido.data_hora, Date) == hoje)
-    elif periodo == 'mensal':
-        return query.filter(cast(Pedido.data_hora, Date) >= (hoje - timedelta(days=30)))
-    else: 
-        return query.filter(cast(Pedido.data_hora, Date) >= (hoje - timedelta(days=7)))
-
-# ✅ NOVO: Filtro ajustado para a tabela de Avaliações
-def apply_date_filter_avaliacao(query, periodo: str):
-    hoje = datetime.now().date()
-    if periodo == 'hoje':
-        return query.filter(cast(Avaliacao.data, Date) == hoje)
-    elif periodo == 'mensal':
-        return query.filter(cast(Avaliacao.data, Date) >= (hoje - timedelta(days=30)))
-    else: 
-        return query.filter(cast(Avaliacao.data, Date) >= (hoje - timedelta(days=7)))
+class MetaAnualResponse(BaseModel):
+    valor_meta: float
+    valor_atual: float
+    percentual: float
 
 # ==========================================
-# 🔑 ROTAS DE AUTENTICAÇÃO (Abertas para permitir login)
+# 🔍 FILTROS AUXILIARES
+# ==========================================
+def apply_date_filter(query, model, periodo: str):
+    hoje = datetime.now().date()
+    coluna_data = cast(model.data_hora, Date) if hasattr(model, 'data_hora') else cast(model.data, Date)
+    
+    if periodo == 'hoje':
+        return query.filter(coluna_data == hoje)
+    elif periodo == 'mensal':
+        return query.filter(coluna_data >= (hoje - timedelta(days=30)))
+    else: 
+        return query.filter(coluna_data >= (hoje - timedelta(days=7)))
+
+# ==========================================
+# 🔑 AUTENTICAÇÃO
 # ==========================================
 @app.post("/api/auth/login")
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     usuario = db.query(Usuario).filter(Usuario.email == form_data.username).first()
     if not usuario or not verificar_senha(form_data.password, usuario.senha_hash):
         raise HTTPException(status_code=401, detail="Credenciais incorretas")
-    return {"access_token": criar_token_acesso(data={"sub": usuario.email}), "token_type": "bearer", "nome": usuario.nome}
+    
+    access_token = criar_token_acesso(data={"sub": usuario.email})
+    return {"access_token": access_token, "token_type": "bearer", "nome": usuario.nome}
 
 @app.post("/api/auth/registrar")
 def registrar_usuario(usuario_data: dict, db: Session = Depends(get_db)):
+    # Verifica se já existe
+    if db.query(Usuario).filter(Usuario.email == usuario_data.get("email")).first():
+        raise HTTPException(status_code=400, detail="Email já cadastrado")
+        
     novo_usuario = Usuario(
         nome=usuario_data.get("nome"),
         email=usuario_data.get("email"),
@@ -133,72 +138,33 @@ def registrar_usuario(usuario_data: dict, db: Session = Depends(get_db)):
     return {"message": "Utilizador criado com sucesso!"}
 
 # ==========================================
-# 🤖 ROTA DE IA (AGORA PROTEGIDA)
+# 📦 OPERAÇÃO E DASHBOARD
 # ==========================================
-@app.post("/api/feedbacks/analise")
-def analisar_feedbacks_ia(request: FeedbackRequest, token: str = Depends(oauth2_scheme)): # ✅ Protegido
-    API_KEY = os.getenv("GEMINI_API_KEY")
+
+# --- Rota de Simulação (Para teste rápido no Dashboard) ---
+@app.post("/api/pedidos/simular")
+async def simular_pedido_random(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    id_simulado = f"SIM-{random.randint(1000, 9999)}"
+    bairros = ["Centro", "Jardins", "Pinheiros", "Itaim Bibi", "Vila Mariana"]
+    pagamentos = ["PIX", "CARTÃO DE CRÉDITO", "CARTÃO DE DÉBITO", "DINHEIRO"]
     
-    if not API_KEY:
-        print("🚨 IA: ERRO - Chave não encontrada no .env!")
-        return [{"tipo": "AlertTriangle", "titulo": "Erro de Configuração", "reclamacao": "Chave API ausente.", "dica": "Verifique o arquivo .env"}]
-
-    try:
-        prompt = f"""
-        Analise estes feedbacks de clientes do iFood: {request.feedbacks}
-        Identifique os 2 maiores problemas recorrentes.
-        Retorne estritamente um JSON (lista de objetos) com:
-        'tipo' (TrendingDown ou AlertTriangle), 'titulo', 'reclamacao' e 'dica'.
-        """
-        
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
-        
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "responseMimeType": "application/json",
-                "temperature": 0.1
-            }
-        }
-        
-        resposta = requests.post(url, json=payload, timeout=15)
-        
-        if resposta.status_code != 200:
-            print(f"🚨 Google API Error {resposta.status_code}: {resposta.text}")
-            raise Exception(f"Google API Error {resposta.status_code}")
-        
-        texto_ia = resposta.json()['candidates'][0]['content']['parts'][0]['text']
-        return json.loads(texto_ia)
-
-    except Exception as e:
-        print(f"🚨 Falha na IA: {str(e)}")
-        return [
-            {
-                "tipo": "AlertTriangle", 
-                "titulo": "Análise Indisponível", 
-                "reclamacao": "Erro ao processar dados com Gemini 2.5.", 
-                "dica": "Verifique os logs ou a quota da API."
-            }
-        ]
-
-# ==========================================
-# 📦 OPERAÇÃO E DASHBOARD (PROTEGIDOS)
-# ==========================================
-@app.post("/api/pedidos")
-async def criar_pedido(pedido_data: PedidoSchema, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)): # ✅ Protegido
     novo_pedido = Pedido(
-        id_pedido=pedido_data.id_pedido, status=pedido_data.status,
-        valor_total=pedido_data.valor_total, taxa_entrega=pedido_data.taxa_entrega,
-        forma_pagamento=pedido_data.forma_pagamento, bairro_destino=pedido_data.bairro_destino,
-        data_hora=pedido_data.data_hora
+        id_pedido=id_simulado,
+        status="PREPARANDO",
+        valor_total=random.uniform(30.0, 150.0),
+        taxa_entrega=random.uniform(5.0, 15.0),
+        forma_pagamento=random.choice(pagamentos),
+        bairro_destino=random.choice(bairros),
+        data_hora=datetime.now()
     )
     db.add(novo_pedido)
     db.commit()
-    await manager.broadcast({"action": "new_order", "id_pedido": novo_pedido.id_pedido})
-    return {"status": "success", "id": novo_pedido.id_pedido}
+    
+    await manager.broadcast({"action": "new_order", "id_pedido": id_simulado})
+    return {"message": "Pedido simulado com sucesso", "id": id_simulado}
 
 @app.put("/api/pedidos/{id_pedido}/status")
-async def atualizar_status(id_pedido: str, status_data: StatusUpdate, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)): # ✅ Protegido
+async def atualizar_status(id_pedido: str, status_data: StatusUpdate, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     pedido = db.query(Pedido).filter(Pedido.id_pedido == id_pedido).first()
     if not pedido:
         raise HTTPException(status_code=404, detail="Pedido não encontrado")
@@ -208,67 +174,112 @@ async def atualizar_status(id_pedido: str, status_data: StatusUpdate, db: Sessio
     await manager.broadcast({"action": "update_status", "id_pedido": id_pedido, "status": status_data.status})
     return {"message": "Status atualizado"}
 
-# --- Rotas de Listagem e Estatísticas ---
 @app.get("/api/pedidos")
-def listar_pedidos(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)): # ✅ Protegido
-    query = db.query(Pedido)
-    query = apply_date_filter(query, periodo)
+def listar_pedidos(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = apply_date_filter(db.query(Pedido), Pedido, periodo)
     return query.order_by(desc(Pedido.data_hora)).all()
 
+# --- Rotas de Analytics ---
+
 @app.get("/api/dashboard/stats")
-def get_dashboard_stats(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)): # ✅ Protegido
-    query = apply_date_filter(db.query(Pedido), periodo)
+def get_dashboard_stats(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = apply_date_filter(db.query(Pedido), Pedido, periodo)
     total = query.count()
     faturamento = query.with_entities(func.sum(Pedido.valor_total)).scalar() or 0.0
-    return {"faturamento_total": round(faturamento, 2), "total_pedidos": total, "ticket_medio": round(faturamento / total, 2) if total > 0 else 0.0}
+    return {
+        "faturamento_total": round(faturamento, 2), 
+        "total_pedidos": total, 
+        "ticket_medio": round(faturamento / total, 2) if total > 0 else 0.0
+    }
 
 @app.get("/api/dashboard/financeiro")
-def get_saude_financeira(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)): # ✅ Protegido
-    query = apply_date_filter(db.query(Pedido).filter(Pedido.status == "CONCLUIDO"), periodo)
-    pedidos = query.all()
-    if not pedidos: return {"bruto": 0.0, "lucro_liquido": 0.0, "margem_percentual": "0%"}
-    faturamento = sum(p.valor_total for p in pedidos)
-    lucro = faturamento - (faturamento * 0.262) # Taxa iFood + Impostos (Simulado)
-    return {"bruto": round(faturamento, 2), "lucro_liquido": round(lucro, 2), "margem_percentual": f"{round((lucro/faturamento*100), 1)}%"}
+def get_saude_financeira(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = apply_date_filter(db.query(Pedido).filter(Pedido.status == "CONCLUIDO"), Pedido, periodo)
+    faturamento = query.with_entities(func.sum(Pedido.valor_total)).scalar() or 0.0
+    # Simulação de Lucro: 26.2% são custos (Taxa iFood + Impostos)
+    lucro = faturamento * 0.738 
+    return {
+        "bruto": round(faturamento, 2), 
+        "lucro_liquido": round(lucro, 2), 
+        "margem_percentual": f"{round((lucro/faturamento*100), 1) if faturamento > 0 else 0}%"
+    }
 
 @app.get("/api/dashboard/vendas-diarias")
-def get_vendas_diarias(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)): # ✅ Protegido
-    query = apply_date_filter(db.query(cast(Pedido.data_hora, Date).label("data"), func.sum(Pedido.valor_total).label("total")).filter(Pedido.status == "CONCLUIDO"), periodo)
+def get_vendas_diarias(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = apply_date_filter(db.query(cast(Pedido.data_hora, Date).label("data"), func.sum(Pedido.valor_total).label("total")).filter(Pedido.status == "CONCLUIDO"), Pedido, periodo)
     vendas = query.group_by("data").order_by("data").all()
     return [{"data": v.data.strftime("%d/%m"), "valor": float(v.total)} for v in vendas]
 
 @app.get("/api/dashboard/top-produtos")
-def get_top_produtos(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)): # ✅ Protegido
-    query = apply_date_filter(db.query(ItemPedido.nome_produto.label("nome"), func.sum(ItemPedido.quantidade).label("qtd"), func.sum(ItemPedido.quantidade * ItemPedido.preco_unitario).label("receita")).join(Pedido).filter(Pedido.status == "CONCLUIDO"), periodo)
+def get_top_produtos(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = apply_date_filter(db.query(
+        ItemPedido.nome_produto.label("nome"), 
+        func.sum(ItemPedido.quantidade).label("qtd"), 
+        func.sum(ItemPedido.quantidade * ItemPedido.preco_unitario).label("receita")
+    ).join(Pedido), Pedido, periodo).filter(Pedido.status == "CONCLUIDO")
+    
     return [{"nome": p.nome, "quantidade": p.qtd, "receita": round(p.receita, 2)} for p in query.group_by("nome").order_by(desc("qtd")).limit(5).all()]
 
 @app.get("/api/dashboard/bairros")
-def get_stats_bairros(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)): # ✅ Protegido
-    query = apply_date_filter(db.query(Pedido.bairro_destino, func.count(Pedido.id_pedido).label("total")).filter(Pedido.status == "CONCLUIDO"), periodo)
+def get_stats_bairros(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = apply_date_filter(db.query(Pedido.bairro_destino, func.count(Pedido.id_pedido).label("total")), Pedido, periodo).filter(Pedido.status == "CONCLUIDO")
     return [{"bairro": r[0], "pedidos": r[1]} for r in query.group_by(Pedido.bairro_destino).order_by(desc("total")).all()]
 
 @app.get("/api/dashboard/horarios")
-def get_stats_horarios(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)): # ✅ Protegido
-    query = apply_date_filter(db.query(func.extract('hour', Pedido.data_hora).label("hora"), func.count(Pedido.id_pedido).label("total")), periodo)
+def get_stats_horarios(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = apply_date_filter(db.query(func.extract('hour', Pedido.data_hora).label("hora"), func.count(Pedido.id_pedido).label("total")), Pedido, periodo)
     return [{"hora": f"{int(r[0])}h", "pedidos": r[1]} for r in query.group_by("hora").order_by("hora").all()]
 
 @app.get("/api/dashboard/pagamentos")
-def get_stats_pagamentos(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)): # ✅ Protegido
-    query = apply_date_filter(db.query(Pedido.forma_pagamento, func.count(Pedido.id_pedido).label("total")), periodo)
+def get_stats_pagamentos(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = apply_date_filter(db.query(Pedido.forma_pagamento, func.count(Pedido.id_pedido).label("total")), Pedido, periodo)
     return [{"tipo": r[0], "valor": r[1]} for r in query.group_by(Pedido.forma_pagamento).all()]
 
+# --- Meta Anual ---
+@app.get("/api/dashboard/meta", response_model=MetaAnualResponse)
+def get_meta_anual(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    valor_meta = 250000.0 # Meta de R$ 250k
+    resultado = db.query(func.sum(Pedido.valor_total)).filter(Pedido.status == "CONCLUIDO").scalar()
+    faturamento_total = float(resultado) if resultado else 0.0
+    percentual = round((faturamento_total / valor_meta) * 100, 1) if valor_meta > 0 else 0.0
+    
+    return {
+        "valor_meta": valor_meta,
+        "valor_atual": round(faturamento_total, 2),
+        "percentual": percentual
+    }
+
+# --- IA & Avaliações ---
+
 @app.get("/api/avaliacoes")
-def listar_avaliacoes(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)): # ✅ Protegido
-    query = apply_date_filter_avaliacao(db.query(Avaliacao), periodo)
+def listar_avaliacoes(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = apply_date_filter(db.query(Avaliacao), Avaliacao, periodo)
     return query.order_by(desc(Avaliacao.data)).all()
 
 @app.post("/api/avaliacoes")
-def criar_avaliacao(dados: AvaliacaoCreate, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)): # ✅ Protegido
-    nova_av = Avaliacao(**dados.dict())
+def criar_avaliacao(dados: AvaliacaoCreate, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    nova_av = Avaliacao(**dados.dict(), data=datetime.now())
     db.add(nova_av)
     db.commit()
     db.refresh(nova_av)
     return nova_av
+
+@app.post("/api/feedbacks/analise")
+def analisar_feedbacks_ia(request: FeedbackRequest, token: str = Depends(oauth2_scheme)):
+    API_KEY = os.getenv("GEMINI_API_KEY")
+    if not API_KEY:
+        return [{"tipo": "AlertTriangle", "titulo": "Erro de Chave", "reclamacao": "API Key ausente.", "dica": "Configure o .env"}]
+
+    try:
+        prompt = f"Analise estes feedbacks: {request.feedbacks}. Retorne um JSON com 2 insights: 'tipo', 'titulo', 'reclamacao', 'dica'."
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+        payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1}}
+        
+        resposta = requests.post(url, json=payload, timeout=10)
+        texto_ia = resposta.json()['candidates'][0]['content']['parts'][0]['text']
+        return json.loads(texto_ia)
+    except Exception:
+        return [{"tipo": "AlertTriangle", "titulo": "IA Indisponível", "reclamacao": "Erro de conexão.", "dica": "Tente mais tarde."}]
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
