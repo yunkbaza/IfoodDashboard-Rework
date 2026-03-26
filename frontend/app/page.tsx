@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import { toast } from "sonner"; // ✅ IMPORTADO: Para as notificações elegantes
 import { 
   getDashboardStats, getFinanceiro, getVendasDiarias, 
   getTopProdutos, getStatsBairros, getStatsHorarios, getStatsPagamentos 
@@ -24,9 +25,9 @@ import ThemeToggle from "../components/ThemeToggle";
 import DashboardSettings, { DashboardConfig, ChartSize } from "../components/DashboardSettings";
 import KanbanBoard from "../components/KanbanBoard";
 import FeedbackView from "../components/FeedbackView"; 
-import MetaAnualModal from "../components/MetaAnualModal"; 
+import MetaAnualModal from "../components/MetaAnualModal";
+import ExportButton from "../components/ExportButton"; // ✅ IMPORTADO
 
-// ✅ ADEUS 'ANY': Agora definimos exatamente o que cada gráfico espera receber
 interface DashboardData {
   stats: { faturamento_total: number; total_pedidos: number; ticket_medio: number };
   financeiro: { bruto: number; lucro_liquido: number; margem_percentual: string };
@@ -82,14 +83,23 @@ export default function Dashboard() {
     loadAllData();
   }, [loadAllData]); 
 
+  // ✅ INCLUÍDO: Lógica de Notificações via WebSocket
   useEffect(() => {
     const wsUrl = "ws://127.0.0.1:8000/ws/pedidos"; 
     const socket = new WebSocket(wsUrl);
 
     socket.onmessage = (event) => {
       const socketData = JSON.parse(event.data);
-      if (socketData.action === "new_order" || socketData.action === "update_status") {
+      if (socketData.action === "new_order") {
+        toast.success(`Novo Pedido Recebido!`, {
+          description: `ID: ${socketData.id_pedido}`,
+        });
         loadAllData(); 
+      } else if (socketData.action === "update_status") {
+        toast.info(`Status Atualizado`, {
+          description: `O pedido ${socketData.id_pedido} mudou de estado.`,
+        });
+        loadAllData();
       }
     };
 
@@ -123,7 +133,6 @@ export default function Dashboard() {
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-[#111111] overflow-hidden font-sans transition-colors duration-300">
       
-      {/* ✅ CORREÇÃO TAILWIND: shrink-0 em vez de flex-shrink-0 */}
       <aside className="w-20 lg:w-64 bg-white dark:bg-[#1C1C1E] border-r border-slate-200 dark:border-[#2C2C2E] flex flex-col justify-between shrink-0 z-20 transition-all duration-300">
         <div>
           <div className="h-24 flex items-center justify-center lg:justify-start lg:px-8 border-b border-slate-100 dark:border-[#2C2C2E]">
@@ -185,6 +194,9 @@ export default function Dashboard() {
 
                 {activeMenu === 'dashboard' && (
                   <>
+                    {/* ✅ INCLUÍDO: O botão de exportar está agora na interface */}
+                    <ExportButton targetId="area-relatorio" />
+
                     <button onClick={() => setIsMetaModalOpen(true)} className="flex items-center gap-2 bg-slate-900 text-white dark:bg-white dark:text-slate-900 px-4 py-2 rounded-xl text-xs font-bold uppercase hover:opacity-80 transition-opacity shadow-sm">
                       <Target size={16} /> Meta Anual
                     </button>
@@ -201,13 +213,13 @@ export default function Dashboard() {
             </div>
           </header>
 
-          <div className={`transition-opacity duration-500 ${isFiltering ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+          {/* ✅ INCLUÍDO: ID "area-relatorio" adicionado para a câmara do PDF saber o que capturar */}
+          <div id="area-relatorio" className={`transition-opacity duration-500 ${isFiltering ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
             
             {activeMenu === 'dashboard' && (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
                   {cards.map((card, index) => (
-                    // ✅ CORREÇÃO TAILWIND: rounded-[24px] -> rounded-3xl
                     <div key={index} className="bg-white dark:bg-[#1C1C1E] p-6 rounded-3xl border border-slate-100 dark:border-[#2C2C2E] shadow-sm hover:border-slate-200 dark:hover:border-[#3C3C3E] transition-all">
                       <div className="flex justify-between items-center mb-4">
                         <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">{card.title}</span>
@@ -218,7 +230,6 @@ export default function Dashboard() {
                   ))}
                 </div>
 
-                {/* ✅ CORREÇÃO TAILWIND GERAL NOS GRÁFICOS: rounded-[32px] -> rounded-4xl | min-h-[300px] -> min-h-75 */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
                   {config.showSales && <div className={`${sizeMap[config.salesSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] min-h-75 shadow-sm`}><SalesChart data={data.vendasDiarias} /></div>}
                   {config.showTopProducts && <div className={`${sizeMap[config.topProductsSize]} bg-white dark:bg-[#1C1C1E] p-8 rounded-4xl border border-slate-100 dark:border-[#2C2C2E] min-h-75 shadow-sm`}><TopProducts data={data.topProdutos} /></div>}
