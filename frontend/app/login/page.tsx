@@ -55,7 +55,7 @@ export default function LoginPage() {
             <Image src="/IfoodVetor.svg" alt="iFood Logo" width={80} height={32} className="object-contain" priority />
           </div>
           <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter text-center leading-none">
-            Gestão Pro
+            Dashboard Pro
           </h2>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-3">
             Acesso Restrito
