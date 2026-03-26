@@ -63,6 +63,7 @@ export async function login(formData: FormData) {
   return res.json();
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function registrar(userData: any) {
   const res = await fetch(`${API_URL}/auth/registrar`, {
     method: 'POST',
@@ -99,7 +100,8 @@ export async function getMetaAnual() {
   return res.json();
 }
 
-export async function getAnaliseIA(feedbacks: any[]) {
+// ✅ CORREÇÃO TS: A IA recebe uma lista de textos (strings), não um 'any'
+export async function getAnaliseIA(feedbacks: string[]) {
   const res = await fetch(`${API_URL}/feedbacks/analise`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -109,10 +111,9 @@ export async function getAnaliseIA(feedbacks: any[]) {
   return res.json();
 }
 
-// Adicione ao final do arquivo frontend/services/api.ts
-
-export async function getAvaliacoes() {
-  const res = await fetch(`${API_URL}/avaliacoes`);
+// ✅ CORREÇÃO TS 2554: Agora a função espera receber o 'periodo' e passa para o backend
+export async function getAvaliacoes(periodo: string = '7dias') {
+  const res = await fetch(`${API_URL}/avaliacoes?periodo=${periodo}`, { cache: 'no-store' });
   if (!res.ok) throw new Error('Falha ao buscar avaliações');
   return res.json();
 }

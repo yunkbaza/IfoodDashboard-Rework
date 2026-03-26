@@ -5,23 +5,41 @@ import { Star, Sparkles, TrendingDown, AlertTriangle, CheckCircle2, Bot, ThumbsU
 import { getAnaliseIA, getAvaliacoes } from "../services/api";
 import SimularAvaliacaoModal from "./SimularAvaliacaoModal";
 
-export default function FeedbackView() {
+// ✅ 1. TIPAGEM FORTE PARA OS FEEDBACKS
+interface Feedback {
+  id?: string | number;
+  cliente: string;
+  sentimento: 'positivo' | 'negativo' | string;
+  data: string | Date;
+  nota: number;
+  texto: string;
+}
+
+// ✅ 2. TIPAGEM FORTE PARA A RESPOSTA DA IA
+interface Insight {
+  tipo: 'TrendingDown' | 'AlertTriangle' | string;
+  titulo: string;
+  reclamacao: string;
+  dica: string;
+}
+
+export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }) {
   const [isAnalyzing, setIsAnalyzing] = useState(true);
-  const [insights, setInsights] = useState<any[]>([]);
-  const [feedbacks, setFeedbacks] = useState<any[]>([]);
+  const [insights, setInsights] = useState<Insight[]>([]);
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   // Função central para buscar dados do banco e pedir análise à IA
   async function carregarDados() {
     setIsAnalyzing(true);
     try {
-      // 1. Busca as avaliações que você salvou no Banco de Dados
-      const dadosBanco = await getAvaliacoes();
+      // ✅ 3. USO DO PERÍODO: Agora a API sabe qual filtro de data aplicar
+      const dadosBanco = await getAvaliacoes(periodo);
       setFeedbacks(dadosBanco);
 
-      // 2. Se houver dados, envia os textos para o Gemini 2.5 analisar
+      // Envia os textos para o Gemini analisar
       if (dadosBanco && dadosBanco.length > 0) {
-        const textosParaIA = dadosBanco.map((f: any) => f.texto);
+        const textosParaIA = dadosBanco.map((f: Feedback) => f.texto);
         const respostaIA = await getAnaliseIA(textosParaIA);
         setInsights(respostaIA);
       } else {
@@ -40,10 +58,11 @@ export default function FeedbackView() {
     }
   }
 
-  // Carrega ao abrir a página
+  // ✅ 4. RECARREGA SEMPRE QUE O PERÍODO MUDAR NO TOPO DO DASHBOARD
   useEffect(() => {
     carregarDados();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodo]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -77,7 +96,8 @@ export default function FeedbackView() {
               key={fb.id || index} 
               className="bg-white dark:bg-[#1C1C1E] p-6 rounded-3xl border border-slate-100 dark:border-[#2C2C2E] shadow-sm flex gap-4 hover:border-[#EA1D2C]/30 transition-all group"
             >
-              <div className="flex-shrink-0 pt-1">
+              {/* ✅ CORREÇÃO TAILWIND: shrink-0 */}
+              <div className="shrink-0 pt-1">
                 <div className="w-12 h-12 rounded-full bg-slate-50 dark:bg-[#2C2C2E] border border-slate-100 dark:border-[#3C3C3E] flex items-center justify-center font-black text-slate-600 dark:text-slate-300 group-hover:scale-110 transition-transform">
                   {fb.cliente.charAt(0)}
                 </div>
@@ -92,7 +112,6 @@ export default function FeedbackView() {
                         {fb.sentimento}
                       </span>
                     </h4>
-                    {/* Formata a data que vem do Python */}
                     <span className="text-xs font-medium text-slate-400">
                       {new Date(fb.data).toLocaleDateString('pt-BR')}
                     </span>
@@ -111,7 +130,8 @@ export default function FeedbackView() {
 
         {/* COLUNA DIREITA: ASSISTENTE VIRTUAL (GEMINI 2.5) */}
         <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-[#1C1C1E] p-6 rounded-3xl border-t-4 border-t-[#EA1D2C] border-x border-b border-slate-100 dark:border-x-[#2C2C2E] dark:border-b-[#2C2C2E] shadow-xl relative overflow-hidden h-full flex flex-col min-h-[500px]">
+          {/* ✅ CORREÇÃO TAILWIND: min-h-125 */}
+          <div className="bg-white dark:bg-[#1C1C1E] p-6 rounded-3xl border-t-4 border-t-[#EA1D2C] border-x border-b border-slate-100 dark:border-x-[#2C2C2E] dark:border-b-[#2C2C2E] shadow-xl relative overflow-hidden h-full flex flex-col min-h-125">
             
             <div className="flex items-center gap-3 mb-6">
               <div className="bg-red-50 dark:bg-[#EA1D2C]/10 p-2.5 rounded-xl border border-red-100 dark:border-[#EA1D2C]/20">
