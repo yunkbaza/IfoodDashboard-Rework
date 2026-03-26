@@ -26,7 +26,7 @@ from app.core.auth import verificar_senha, obter_hash_senha, criar_token_acesso
 load_dotenv()
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Insight Control API", version="3.2.0")
+app = FastAPI(title="Ifood Dashboard API", version="3.2.0")
 
 # ==========================================
 # 🛡️ CONFIGURAÇÃO DE CORS (CORRIGIDO)
@@ -34,7 +34,7 @@ app = FastAPI(title="Insight Control API", version="3.2.0")
 # Removido os links "quebrados" da formatação markdown
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"], # Domínios seguros do Frontend
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "https://ifood-dashboard-rework.vercel.app"], # Domínios seguros do Frontend
     allow_credentials=True,
     allow_methods=["*"], 
     allow_headers=["*"], 
