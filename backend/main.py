@@ -2,6 +2,7 @@ import os
 import json
 import requests
 import random
+import re  # ✅ IMPORT DO REGEX ADICIONADO AQUI
 from datetime import datetime, timedelta
 from typing import List
 
@@ -25,14 +26,15 @@ from app.core.auth import verificar_senha, obter_hash_senha, criar_token_acesso
 load_dotenv()
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="iFood Dashboard Pro API", version="3.1.0")
+app = FastAPI(title="Insight Control API", version="3.2.0")
 
 # ==========================================
-# 🛡️ CONFIGURAÇÃO DE CORS
+# 🛡️ CONFIGURAÇÃO DE CORS (CORRIGIDO)
 # ==========================================
+# Removido os links "quebrados" da formatação markdown
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Em produção, substitua pelo link da Vercel
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"], # Domínios seguros do Frontend
     allow_credentials=True,
     allow_methods=["*"], 
     allow_headers=["*"], 
@@ -124,7 +126,6 @@ def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db:
 
 @app.post("/api/auth/registrar")
 def registrar_usuario(usuario_data: dict, db: Session = Depends(get_db)):
-    # Verifica se já existe
     if db.query(Usuario).filter(Usuario.email == usuario_data.get("email")).first():
         raise HTTPException(status_code=400, detail="Email já cadastrado")
         
@@ -141,17 +142,16 @@ def registrar_usuario(usuario_data: dict, db: Session = Depends(get_db)):
 # 📦 OPERAÇÃO E DASHBOARD
 # ==========================================
 
-# --- Rota de Simulação (Para teste rápido no Dashboard) ---
 @app.post("/api/pedidos/simular")
 async def simular_pedido_random(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    id_simulado = f"SIM-{random.randint(1000, 9999)}"
-    bairros = ["Centro", "Jardins", "Pinheiros", "Itaim Bibi", "Vila Mariana"]
+    id_simulado = f"IFD-{random.randint(10000, 99999)}"
+    bairros = ["Centro", "Jardins", "Pinheiros", "Itaim Bibi", "Vila Mariana", "Santana", "Bela Vista"]
     pagamentos = ["PIX", "CARTÃO DE CRÉDITO", "CARTÃO DE DÉBITO", "DINHEIRO"]
     
     novo_pedido = Pedido(
         id_pedido=id_simulado,
-        status="PREPARANDO",
-        valor_total=random.uniform(30.0, 150.0),
+        status="PENDENTE",
+        valor_total=random.uniform(35.0, 180.0),
         taxa_entrega=random.uniform(5.0, 15.0),
         forma_pagamento=random.choice(pagamentos),
         bairro_destino=random.choice(bairros),
@@ -196,7 +196,6 @@ def get_dashboard_stats(periodo: str = Query("7dias"), db: Session = Depends(get
 def get_saude_financeira(periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     query = apply_date_filter(db.query(Pedido).filter(Pedido.status == "CONCLUIDO"), Pedido, periodo)
     faturamento = query.with_entities(func.sum(Pedido.valor_total)).scalar() or 0.0
-    # Simulação de Lucro: 26.2% são custos (Taxa iFood + Impostos)
     lucro = faturamento * 0.738 
     return {
         "bruto": round(faturamento, 2), 
@@ -264,22 +263,73 @@ def criar_avaliacao(dados: AvaliacaoCreate, db: Session = Depends(get_db), token
     db.refresh(nova_av)
     return nova_av
 
+# ✅ ROTA DE IA COM EXTRAÇÃO BLINDADA (REGEX)
 @app.post("/api/feedbacks/analise")
 def analisar_feedbacks_ia(request: FeedbackRequest, token: str = Depends(oauth2_scheme)):
     API_KEY = os.getenv("GEMINI_API_KEY")
     if not API_KEY:
-        return [{"tipo": "AlertTriangle", "titulo": "Erro de Chave", "reclamacao": "API Key ausente.", "dica": "Configure o .env"}]
+        return [{"tipo": "AlertTriangle", "titulo": "Erro de Chave", "reclamacao": "API Key ausente no sistema.", "dica": "Configure a variável GEMINI_API_KEY no arquivo .env"}]
 
     try:
-        prompt = f"Analise estes feedbacks: {request.feedbacks}. Retorne um JSON com 2 insights: 'tipo', 'titulo', 'reclamacao', 'dica'."
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
-        payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0.1}}
+        # Prompt rigoroso para forçar o output exato
+        prompt = f"""
+        Como Analista de Qualidade Sênior, avalie ESTES EXATOS feedbacks de clientes de um restaurante: 
+        "{request.feedbacks}"
         
-        resposta = requests.post(url, json=payload, timeout=10)
+        Você DEVE retornar APENAS um array JSON válido, sem NENHUM texto antes ou depois.
+        O array deve conter 2 ou 3 insights no máximo.
+        
+        Formato JSON EXIGIDO e OBRIGATÓRIO:
+        [
+            {{
+                "tipo": "AlertTriangle",
+                "titulo": "Resumo curto (ex: Atrasos na Entrega)",
+                "reclamacao": "A dor principal mencionada pelo cliente",
+                "dica": "Sua sugestão analítica de resolução"
+            }},
+            {{
+                "tipo": "TrendingDown",
+                "titulo": "Outro resumo curto",
+                "reclamacao": "Outra dor principal",
+                "dica": "Outra sugestão analítica"
+            }}
+        ]
+        """
+        
+        # URL corrigida sem os colchetes do markdown
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}], 
+            "generationConfig": {
+                "responseMimeType": "application/json", 
+                "temperature": 0.2
+            }
+        }
+        
+        resposta = requests.post(url, json=payload, timeout=15)
+        
+        if resposta.status_code != 200:
+            print(f"\n[ERRO GOOGLE API] Status: {resposta.status_code}")
+            print(f"Detalhes: {resposta.text}\n")
+            return [{"tipo": "AlertTriangle", "titulo": "Falha no Motor IA", "reclamacao": f"Código {resposta.status_code}", "dica": "A API do Google recusou a requisição."}]
+
         texto_ia = resposta.json()['candidates'][0]['content']['parts'][0]['text']
-        return json.loads(texto_ia)
-    except Exception:
-        return [{"tipo": "AlertTriangle", "titulo": "IA Indisponível", "reclamacao": "Erro de conexão.", "dica": "Tente mais tarde."}]
+        
+        # ✅ BLINDAGEM MÁXIMA: Puxa só o que for Array Json [ ... ] e ignora o resto
+        match = re.search(r'\[.*\]', texto_ia, re.DOTALL)
+        if match:
+            texto_limpo = match.group(0)
+            return json.loads(texto_limpo)
+        else:
+             print(f"\n[ALERTA IA] Resposta fora do formato: {texto_ia}\n")
+             return [{"tipo": "AlertTriangle", "titulo": "Erro de Formatação", "reclamacao": "A IA não retornou um JSON válido.", "dica": "Tente gerar novamente."}]
+        
+    except json.JSONDecodeError as e:
+        print(f"\n[ERRO DE CONVERSÃO JSON] {e}")
+        return [{"tipo": "AlertTriangle", "titulo": "Erro de Conversão", "reclamacao": "A IA gerou um formato inválido.", "dica": "Tente gerar a análise novamente."}]
+    except Exception as e:
+        print(f"\n[ERRO CRÍTICO IA] {str(e)}\n")
+        return [{"tipo": "AlertTriangle", "titulo": "Serviço Indisponível", "reclamacao": "Erro interno de comunicação.", "dica": "Verifique o terminal do Backend."}]
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
