@@ -8,71 +8,79 @@ interface PagamentoData {
 }
 
 export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
-  // Paleta oficial iFood Pro
+  // Mapeamento de cores baseado nos tipos enviados pelo backend
   const COLORS: Record<string, string> = {
-    'CARTAO': '#EA1D2C', 
-    'PIX': '#10b981',    
-    'DINHEIRO': '#f59e0b' 
+    'PIX': '#10b981',
+    'CARTÃO DE CRÉDITO': '#EA1D2C',
+    'CARTÃO DE DÉBITO': '#FF7A00',
+    'DINHEIRO': '#f59e0b',
+    'CARTAO': '#EA1D2C'
   };
 
-  const getColor = (tipo: string) => COLORS[tipo.toUpperCase()] || '#8E8E93';
+  const getColor = (tipo: string) => {
+    const key = tipo.toUpperCase();
+    return COLORS[key] || '#8E8E93';
+  };
 
-  // Cálculo do volume total para as porcentagens
+  // Cálculo do total para as porcentagens
   const total = data.reduce((acc, entry) => acc + entry.valor, 0);
 
   return (
     <div className="h-full w-full flex flex-col">
       <div className="mb-2">
-        <h2 className="text-xl font-bold text-slate-800 dark:text-white transition-colors">
+        <h2 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">
           Métodos de Pagamento
         </h2>
-        <p className="text-sm text-slate-500 dark:text-[#8E8E93] font-medium transition-colors">
+        <p className="text-[10px] text-slate-500 dark:text-[#8E8E93] font-bold uppercase tracking-widest">
           Preferência de faturamento
         </p>
       </div>
       
-      <div className="flex-1 w-full min-h-0">
+      <div className="flex-1 w-full min-h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
               data={data}
               cx="50%"
-              cy="48%"
-              innerRadius={75}
-              outerRadius={110}
-              paddingAngle={6}
+              cy="80%" 
+              startAngle={180}
+              endAngle={0}
+              innerRadius={80}
+              outerRadius={125}
+              paddingAngle={8}
               dataKey="valor"
               nameKey="tipo"
               stroke="none"
-              animationBegin={200}
-              animationDuration={1000}
+              animationBegin={0}
+              animationDuration={1200}
             >
               {data.map((entry, index) => (
                 <Cell 
                   key={`cell-${index}`} 
                   fill={getColor(entry.tipo)} 
-                  className="hover:opacity-85 transition-opacity cursor-pointer outline-none"
+                  className="outline-none hover:opacity-80 transition-opacity cursor-pointer"
                 />
               ))}
             </Pie>
             
             <Tooltip 
+              cursor={{ fill: 'transparent' }}
               contentStyle={{ 
                 backgroundColor: '#1C1C1E', 
-                borderRadius: '16px', 
-                border: '1px solid #2C2C2E',
+                borderRadius: '12px', 
+                border: 'none',
                 color: '#fff',
-                padding: '12px',
-                boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.5)'
+                fontSize: '12px',
+                boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.3)'
               }}
-              itemStyle={{ fontWeight: 'bold', fontSize: '14px' }}
-              // CORREÇÃO DEFINITIVA: Adicionado 'readonly' para aceitar o array interno do Recharts
-              formatter={(value: string | number | readonly (string | number)[] | undefined) => {
+              // ✅ CORREÇÃO TS DEFINITIVA: Adicionado 'readonly' à definição do array
+              formatter={(value: number | string | readonly (number | string)[] | undefined) => {
+                // Tratamos o valor caso ele venha como array ou valor único
                 const rawValue = Array.isArray(value) ? value[0] : value;
-                const val = Number(rawValue) || 0;
-                const percent = total > 0 ? ((val / total) * 100).toFixed(1) : "0";
+                const numericValue = Number(rawValue) || 0;
+                const percent = total > 0 ? ((numericValue / total) * 100).toFixed(1) : "0";
                 
-                return [`${val} pedidos (${percent}%)`, 'Volume'];
+                return [`${numericValue} pedidos (${percent}%)`, 'Volume'];
               }}
             />
             
@@ -80,11 +88,10 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
               verticalAlign="bottom" 
               align="center"
               iconType="circle"
-              iconSize={10}
-              wrapperStyle={{ paddingTop: '20px' }}
-              // Tipagem segura para a legenda também
+              iconSize={8}
+              wrapperStyle={{ paddingBottom: '15px' }}
               formatter={(value: string) => (
-                <span className="text-xs font-bold text-slate-600 dark:text-gray-400 uppercase tracking-widest ml-1">
+                <span className="text-[10px] font-black text-slate-500 dark:text-gray-400 uppercase tracking-widest ml-1">
                   {value}
                 </span>
               )}
