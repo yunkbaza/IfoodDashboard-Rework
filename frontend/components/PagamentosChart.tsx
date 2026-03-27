@@ -18,31 +18,38 @@ interface PagamentoData {
 }
 
 export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
-  const { lang, t, formatCurrency } = useLanguage();
+  const { t, formatCurrency } = useLanguage();
 
   const COLORS = [
-    '#EA1D2C', // iFood Primary Red
-    '#F8FAFC', // Ice White
-    '#6366F1', // Electric Indigo
-    '#FACC15', // Gold Yellow
-    '#94A3B8', // Medium Slate
+    '#EA1D2C', // Vermelho Principal iFood
+    '#F8FAFC', // Branco Gelo
+    '#6366F1', // Indigo
+    '#FACC15', // Amarelo
+    '#94A3B8', // Slate
   ];
 
-  // 1. Função memorizada para traduzir as chaves vindas do backend
+  // 1. Função de Tradução com Normalização Estrita
   const getTranslatedLabel = useCallback((tipo: string) => {
+    // Normaliza o texto: remove espaços e coloca em minúsculas para comparação
+    const normalizado = tipo.trim().toLowerCase();
+    
     const map: Record<string, string> = {
-      'Cartão de Crédito': t.charts.pagamentos.methods.credit,
-      'Cartão de Débito': t.charts.pagamentos.methods.debit,
-      'Dinheiro': t.charts.pagamentos.methods.cash,
-      'cash': t.charts.pagamentos.methods.cash, // Trata variação comum
-      'PIX': t.charts.pagamentos.methods.pix
+      'cartão de crédito': t.charts.pagamentos.methods.credit,
+      'cartao de credito': t.charts.pagamentos.methods.credit,
+      'cartão de débito': t.charts.pagamentos.methods.debit,
+      'cartao de debito': t.charts.pagamentos.methods.debit,
+      'dinheiro': t.charts.pagamentos.methods.cash,
+      'cash': t.charts.pagamentos.methods.cash,
+      'pix': t.charts.pagamentos.methods.pix
     };
-    return map[tipo] || tipo;
+
+    return map[normalizado] || tipo;
   }, [t]);
 
-  // 2. AGRUPAMENTO: Soma os valores que pertencem à mesma categoria traduzida
-  // Isso remove as fatias duplicadas (ex: "Dinheiro" e "cash" viram um só)
+  // 2. AGRUPAMENTO ROBUSTO: Garante que "Dinheiro", "dinheiro " e "cash" sejam a mesma fatia
   const processedData = useMemo(() => {
+    if (!data) return [];
+
     const grouped = data.reduce((acc: Record<string, PagamentoData>, item) => {
       const translatedLabel = getTranslatedLabel(item.tipo);
       
@@ -87,7 +94,7 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={processedData} // ✅ Agora usa os dados agrupados e únicos
+              data={processedData}
               cx="50%" 
               cy="45%" 
               innerRadius="60%" 
