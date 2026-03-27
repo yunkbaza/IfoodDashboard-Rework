@@ -10,37 +10,40 @@ import {
   CartesianGrid 
 } from 'recharts';
 import { TrendingUp, ShieldCheck } from "lucide-react";
+import { useLanguage } from "../contexts/LanguageContext"; // ✅ Integração com o sistema de tradução
 
 interface SalesChartProps {
   data: { data: string; valor: number }[];
 }
 
 export default function SalesChart({ data }: SalesChartProps) {
+  const { lang, t } = useLanguage(); // ✅ Hook de idioma ativado
+
   return (
-    // ✅ ELASTIC STRUCTURE: Ensures the chart fills the card without stretching
+    // ✅ ESTRUTURA ELÁSTICA: Garante que o gráfico ocupe todo o card sem esticar
     <div className="flex-1 flex flex-col min-h-0 w-full group">
       
-      {/* Chart Header - shrink-0 prevents text from being cut off */}
+      {/* Cabeçalho do Gráfico Traduzido - shrink-0 impede cortes no texto */}
       <div className="mb-6 shrink-0">
         <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] mb-1">
-          Financial Performance
+          {t.charts.sales.subtitle} {/* */}
         </h3>
         <div className="flex items-center gap-2">
           <div className="p-2 rounded-lg bg-[#EA1D2C]/10 text-[#EA1D2C]">
             <TrendingUp size={20} />
           </div>
           <p className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">
-            Sales Trend
+            {t.charts.sales.title} {/* */}
           </p>
         </div>
       </div>
 
-      {/* Recharts Container */}
+      {/* Container do Recharts */}
       <div className="flex-1 min-h-0 w-full relative">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart 
             data={data} 
-            // ✅ ADJUSTED MARGINS: Prevents the last point or currency value from being cut off
+            // ✅ MARGENS AJUSTADAS: Evita que o último ponto ou o valor da moeda sejam cortados
             margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
           >
             <defs>
@@ -69,8 +72,9 @@ export default function SalesChart({ data }: SalesChartProps) {
               axisLine={false} 
               tickLine={false} 
               tick={{ fill: '#64748b', fontSize: 10, fontWeight: 500 }}
-              tickFormatter={(value) => `$ ${value}`}
-              width={65} // Ensures fixed space for "$ XXXX"
+              // ✅ Símbolo de moeda dinâmico
+              tickFormatter={(value) => `${lang === 'en' ? '$' : 'R$'} ${value}`}
+              width={65} 
             />
 
             <Tooltip 
@@ -80,7 +84,7 @@ export default function SalesChart({ data }: SalesChartProps) {
                   return (
                     <div className="bg-white/95 dark:bg-[#111113]/95 backdrop-blur-xl p-5 rounded-3xl shadow-2xl border border-slate-100 dark:border-white/10 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-200">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                        Daily Revenue
+                        {t.charts.sales.tooltip} {/* */}
                       </p>
                       <div className="flex items-center gap-2 mb-1">
                         <div className="w-2 h-2 rounded-full bg-[#EA1D2C] animate-pulse" />
@@ -89,7 +93,8 @@ export default function SalesChart({ data }: SalesChartProps) {
                         </p>
                       </div>
                       <p className="text-2xl font-black text-[#EA1D2C] tabular-nums">
-                        $ {payload[0].value?.toLocaleString('en-US', { 
+                        {/* ✅ Formatação numérica localizada */}
+                        {lang === 'en' ? '$' : 'R$'} {payload[0].value?.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR', { 
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2 
                         })}
@@ -127,17 +132,19 @@ export default function SalesChart({ data }: SalesChartProps) {
         </ResponsiveContainer>
       </div>
 
-      {/* Fixed Footer: Matches the design of the other charts */}
+      {/* Footer Fixo Traduzido */}
       <div className="mt-4 flex justify-between items-center shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-1.5 h-1.5 rounded-full bg-[#EA1D2C]" />
           <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-            Gross Revenue
+            {t.charts.sales.footer} {/* */}
           </p>
         </div>
         <div className="px-3 py-1 bg-slate-50 dark:bg-[#1C1C1E] rounded-lg border dark:border-white/5 flex items-center gap-1">
           <ShieldCheck size={12} className="text-emerald-500" />
-          <span className="text-[8px] font-black text-slate-500 uppercase tracking-tight">Exact Calculation</span>
+          <span className="text-[8px] font-black text-slate-500 uppercase tracking-tight">
+            {t.charts.sales.badge} {/* */}
+          </span>
         </div>
       </div>
       
