@@ -23,5 +23,20 @@ export const pt = {
     bairros: { title: "Pedidos por Região", subtitle: "Distribuição Geográfica", tooltip: "Análise de Logística", total: "Pedidos Totais", badge: "Zona de Alta Demanda", footer: "Mapeamento de Calor Logístico" },
     horarios: { title: "Fluxo Operacional", subtitle: "Inteligência de Pico", tooltip: "Janela de Tempo", orders: "Pedidos", high: "Momento de Alta Demanda", low: "Momento de Baixa Demanda", footer: "Monitoramento de Carga de Trabalho", badge: "Sincronizado" },
     pagamentos: { title: "Faturamento por Método", subtitle: "Canais Financeiros", total: "Receita Total", tooltip: "Distribuição Detalhada", share: "do volume total", footer: "Dados auditados via API iFood", methods: { credit: "Cartão de Crédito", debit: "Cartão de Débito", cash: "Dinheiro", pix: "Pix" } }
-  }
+  },
+  // Adicione dentro do objeto principal
+kanban: {
+  orderId: "ID do Pedido",
+  totalValue: "Valor Total",
+  tickets: "pedidos",
+  dropHere: "Solte os pedidos aqui",
+  limit: "Apenas os últimos 10 pedidos são visíveis",
+  columns: { pending: "Novos Pedidos", preparing: "Na Cozinha", completed: "Despachados" },
+  toasts: { 
+    moved: "Pedido movido para", 
+    syncError: "Falha ao sincronizar pedidos da cozinha.",
+    updateError: "Erro ao atualizar servidor. Revertendo ação." 
+  },
+  status: { live: "Link Cozinha: Ativo", offline: "Link Cozinha: Offline", workstation: "Preparando Estação de Trabalho" }
+}
 };
