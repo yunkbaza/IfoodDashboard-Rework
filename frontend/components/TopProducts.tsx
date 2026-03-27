@@ -11,6 +11,7 @@ import {
   CartesianGrid 
 } from 'recharts';
 import { Trophy } from "lucide-react";
+import { useLanguage } from "../contexts/LanguageContext"; //
 
 interface Product {
   nome: string;
@@ -19,41 +20,44 @@ interface Product {
 }
 
 export default function TopProducts({ data }: { data: Product[] }) {
-  // ✅ EXCLUSIVE IFOOD PALETTE: Hierarchy variations for the ranking
+  // ✅ Extraindo formatCurrency para conversão real
+  const { lang, t, formatCurrency } = useLanguage(); 
+
+  // ✅ PALETA IFOOD EXCLUSIVA: Variações de hierarquia para o ranking
   const IFOOD_PALETTE = [
-    '#EA1D2C', // 1st Place: Pure iFood Red
-    '#B31622', // 2nd Place: Dark Red
-    '#F23D4C', // 3rd Place: Vivid Red
-    '#E0525D', // 4th Place: Soft Red
-    '#FF8C96', // 5th Place: Pastel Red
+    '#EA1D2C', // 1º Lugar
+    '#B31622', // 2º Lugar
+    '#F23D4C', // 3º Lugar
+    '#E0525D', // 4º Lugar
+    '#FF8C96', // 5º Lugar
   ];
 
   return (
-    // ✅ STRUCTURAL FIX: flex-1 and min-h-0 ensure a perfect fit in the dynamic grid
+    // ✅ ESTRUTURA ELÁSTICA: Garante o encaixe perfeito no grid dinâmico
     <div className="flex-1 flex flex-col min-h-0 w-full group">
       
-      {/* Refined Header - shrink-0 prevents it from being squashed */}
+      {/* Cabeçalho Refinado e Traduzido */}
       <div className="mb-6 shrink-0">
         <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] mb-1">
-          Menu Metrics
+          {t.charts.topProducts.subtitle}
         </h3>
         <div className="flex items-center gap-2">
           <div className="p-2 rounded-lg bg-[#EA1D2C]/10 text-[#EA1D2C]">
             <Trophy size={20} />
           </div>
           <p className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">
-            Top Sellers
+            {t.charts.topProducts.title}
           </p>
         </div>
       </div>
 
-      {/* Chart Container (This grows/shrinks) */}
+      {/* Container do Gráfico */}
       <div className="flex-1 min-h-0 w-full relative">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart 
             data={data} 
             layout="vertical" 
-            margin={{ top: 0, right: 20, left: 10, bottom: 0 }} // Adjusted margins to prevent clipping
+            margin={{ top: 0, right: 20, left: 10, bottom: 0 }}
           >
             <CartesianGrid 
               strokeDasharray="0" 
@@ -69,7 +73,7 @@ export default function TopProducts({ data }: { data: Product[] }) {
               type="category" 
               axisLine={false} 
               tickLine={false} 
-              width={110} // Fixed space so names don't overlap bars
+              width={110} 
               tick={(props) => {
                 const { x, y, payload } = props;
                 return (
@@ -82,7 +86,6 @@ export default function TopProducts({ data }: { data: Product[] }) {
                       fill="currentColor" 
                       className="text-[10px] font-black fill-slate-600 dark:fill-slate-400 uppercase tracking-tighter"
                     >
-                      {/* Elegant truncation increased to 18 characters */}
                       {payload.value.length > 18 ? `${payload.value.substring(0, 18)}...` : payload.value}
                     </text>
                   </g>
@@ -90,7 +93,7 @@ export default function TopProducts({ data }: { data: Product[] }) {
               }}
             />
 
-            {/* Glassmorphism Tooltip */}
+            {/* Tooltip com Conversão Real */}
             <Tooltip 
               cursor={{ fill: 'rgba(234, 29, 44, 0.04)' }}
               content={({ active, payload }) => {
@@ -99,17 +102,18 @@ export default function TopProducts({ data }: { data: Product[] }) {
                   return (
                     <div className="bg-white/95 dark:bg-[#111113]/95 backdrop-blur-xl p-5 rounded-3xl shadow-2xl border border-slate-100 dark:border-white/10 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-200">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                        Product Insights
+                        {t.charts.topProducts.tooltip}
                       </p>
                       <p className="text-sm font-black text-slate-900 dark:text-white mb-2 uppercase tracking-tight">
                         {item.nome}
                       </p>
                       <div className="space-y-1.5">
                         <p className="text-xs font-bold text-[#EA1D2C]">
-                          {item.quantidade} units sold
+                          {item.quantidade} {t.charts.topProducts.sold}
                         </p>
                         <p className="text-xl font-black text-emerald-500 tabular-nums">
-                          $ {item.receita.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          {/* ✅ Aplicando a conversão e formatação real */}
+                          {formatCurrency(item.receita)}
                         </p>
                       </div>
                     </div>
@@ -119,7 +123,6 @@ export default function TopProducts({ data }: { data: Product[] }) {
               }}
             />
 
-            {/* The Bar: Optimized size to be neither too thin nor too thick */}
             <Bar 
               dataKey="quantidade" 
               radius={[0, 8, 8, 0]} 
@@ -139,10 +142,10 @@ export default function TopProducts({ data }: { data: Product[] }) {
         </ResponsiveContainer>
       </div>
 
-      {/* Fixed bottom legend */}
+      {/* Footer Traduzido */}
       <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 flex justify-between items-center shrink-0">
         <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-          Order volume over period
+          {t.charts.topProducts.footer}
         </p>
         <div className="flex gap-1.5">
           {IFOOD_PALETTE.map((color, i) => (

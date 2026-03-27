@@ -10,7 +10,7 @@ import {
   CartesianGrid 
 } from 'recharts';
 import { Clock } from "lucide-react";
-import { useLanguage } from "../contexts/LanguageContext"; // ✅ Importado
+import { useLanguage } from "../contexts/LanguageContext"; // ✅ Importado para internacionalização
 
 interface HorarioData {
   hora: string;
@@ -18,11 +18,11 @@ interface HorarioData {
 }
 
 export default function HorariosChart({ data }: { data: HorarioData[] }) {
-  const { t } = useLanguage(); // ✅ Hook de tradução ativado
+  const { lang, t } = useLanguage(); // ✅ Hook de tradução ativado
 
   return (
     <div className="h-full w-full flex flex-col">
-      {/* Cabeçalho de Alta Performance */}
+      {/* Cabeçalho de Alta Performance Traduzido */}
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.3em] mb-1">
@@ -37,7 +37,7 @@ export default function HorariosChart({ data }: { data: HorarioData[] }) {
         </div>
       </div>
 
-      {/* ✅ TAILWIND FIX: min-h-75 para consistência no grid */}
+      {/* Container do Gráfico */}
       <div className="flex-1 w-full min-h-75">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart 
@@ -70,14 +70,14 @@ export default function HorariosChart({ data }: { data: HorarioData[] }) {
               axisLine={false} 
               tickLine={false} 
               tick={{ fill: '#64748b', fontSize: 10, fontWeight: 500 }}
-              tickFormatter={(value) => `${value}`} 
+              // ✅ Formatação de número localizada para o eixo
+              tickFormatter={(value) => value.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR')} 
             />
 
             <Tooltip 
               cursor={{ stroke: '#EA1D2C', strokeWidth: 1, strokeDasharray: '4 4' }}
               content={({ active, payload, label }) => {
                 if (active && payload && payload.length) {
-                  // ✅ TYPESCRIPT FIX: Conversão numérica segura
                   const numericValue = Number(payload[0].value) || 0;
 
                   return (
@@ -92,7 +92,11 @@ export default function HorariosChart({ data }: { data: HorarioData[] }) {
                         </p>
                       </div>
                       <p className="text-2xl font-black text-[#EA1D2C] tracking-tighter">
-                        {numericValue} <span className="text-[10px] font-bold text-slate-400 uppercase tracking-normal">{t.charts.horarios.orders}</span>
+                        {/* ✅ Formatação de número localizada no Tooltip */}
+                        {numericValue.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR')} 
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-normal ml-1">
+                          {t.charts.horarios.orders}
+                        </span>
                       </p>
                       <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/5">
                         <p className="text-[9px] font-bold text-slate-500 uppercase">

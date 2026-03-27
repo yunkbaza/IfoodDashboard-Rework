@@ -11,7 +11,7 @@ import {
   CartesianGrid 
 } from 'recharts';
 import { MapPin } from "lucide-react";
-import { useLanguage } from "../contexts/LanguageContext"; // ✅ Integração com o sistema de tradução
+import { useLanguage } from "../contexts/LanguageContext"; // ✅
 
 interface BairroData {
   bairro: string;
@@ -19,9 +19,9 @@ interface BairroData {
 }
 
 export default function BairrosChart({ data }: { data: BairroData[] }) {
-  const { t } = useLanguage(); // ✅ Hook de idioma ativado
+  const { lang, t } = useLanguage(); // ✅
 
-  // ✅ IFOOD LOGISTICS PALETTE: Tons de vermelho para mapeamento de calor
+  // ✅ PALETA IFOOD LOGISTICS: Tons de vermelho para mapeamento de calor
   const IFOOD_RED_SHADES = [
     '#EA1D2C', // Principal
     '#B31622', // Escuro
@@ -34,7 +34,7 @@ export default function BairrosChart({ data }: { data: BairroData[] }) {
     // ✅ ESTRUTURA ELÁSTICA: Garante que ocupe perfeitamente o grid do dashboard
     <div className="flex-1 flex flex-col min-h-0 w-full group">
       
-      {/* Cabeçalho de Alta Definição - shrink-0 impede compressão */}
+      {/* Cabeçalho de Alta Definição Traduzido */}
       <div className="mb-6 shrink-0">
         <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] mb-1">
           {t.charts.bairros.subtitle}
@@ -49,7 +49,7 @@ export default function BairrosChart({ data }: { data: BairroData[] }) {
         </div>
       </div>
 
-      {/* Container do Gráfico (Este é o que cresce/encolhe dinamicamente) */}
+      {/* Container do Gráfico Dinâmico */}
       <div className="flex-1 min-h-0 w-full relative">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart 
@@ -57,7 +57,6 @@ export default function BairrosChart({ data }: { data: BairroData[] }) {
             layout="vertical" 
             margin={{ top: 0, right: 20, left: 10, bottom: 0 }}
           >
-            {/* Grelha de referência sutil */}
             <CartesianGrid 
               strokeDasharray="0" 
               horizontal={false} 
@@ -72,7 +71,7 @@ export default function BairrosChart({ data }: { data: BairroData[] }) {
               type="category" 
               axisLine={false} 
               tickLine={false} 
-              width={110} // ✅ Espaço fixo para não colar os nomes nas barras
+              width={110} 
               tick={(props) => {
                 const { x, y, payload } = props;
                 return (
@@ -108,7 +107,8 @@ export default function BairrosChart({ data }: { data: BairroData[] }) {
                       </p>
                       <div className="flex items-baseline gap-2">
                         <p className="text-2xl font-black text-[#EA1D2C] tabular-nums">
-                          {item.pedidos}
+                          {/* Formatação numérica localizada */}
+                          {item.pedidos.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR')}
                         </p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase">
                           {t.charts.bairros.total}
@@ -131,8 +131,8 @@ export default function BairrosChart({ data }: { data: BairroData[] }) {
 
             <Bar 
               dataKey="pedidos" 
-              radius={[0, 8, 8, 0]} // Cantos arredondados consistentes
-              barSize={28} // Barras mais robustas
+              radius={[0, 8, 8, 0]} 
+              barSize={28}
               animationDuration={1800}
               animationEasing="ease-in-out"
             >
@@ -149,7 +149,7 @@ export default function BairrosChart({ data }: { data: BairroData[] }) {
         </ResponsiveContainer>
       </div>
 
-      {/* Footer informativo traduzido - shrink-0 garante presença constante */}
+      {/* Footer informativo traduzido */}
       <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 flex justify-between items-center shrink-0">
         <p className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-widest">
           {t.charts.bairros.footer}

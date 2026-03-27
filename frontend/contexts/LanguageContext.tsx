@@ -11,17 +11,17 @@ interface LanguageContextType {
   lang: Language;
   t: typeof en;
   toggleLanguage: () => void;
+  formatCurrency: (value: number) => string; // ✅ Adicionado
 }
 
 const LanguageContext = createContext<LanguageContextType>({
   lang: "en",
   t: en,
   toggleLanguage: () => {},
+  formatCurrency: (v) => v.toString(),
 });
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  // ✅ CORREÇÃO: Lazy Initializer. 
-  // O React executa essa função apenas UMA vez, no início do ciclo de vida.
   const [lang, setLang] = useState<Language>(() => {
     if (typeof window !== "undefined") {
       const savedLang = localStorage.getItem("app_lang") as Language;
@@ -36,8 +36,26 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("app_lang", nextLang);
   };
 
+  // ✅ Lógica de Conversão e Formatação Real
+  const formatCurrency = (value: number) => {
+    const exchangeRate = 5.0; // 1 USD = 5 BRL
+    
+    if (lang === "en") {
+      const converted = value / exchangeRate;
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+      }).format(converted);
+    }
+
+    return new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(value);
+  };
+
   return (
-    <LanguageContext.Provider value={{ lang, t: translations[lang], toggleLanguage }}>
+    <LanguageContext.Provider value={{ lang, t: translations[lang], toggleLanguage, formatCurrency }}>
       {children}
     </LanguageContext.Provider>
   );

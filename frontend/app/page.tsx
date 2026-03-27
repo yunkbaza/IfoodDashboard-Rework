@@ -46,7 +46,7 @@ interface DashboardData {
 
 export default function Dashboard() {
   const router = useRouter();
-  const { lang, t } = useLanguage(); // ✅ HOOK DE IDIOMA ATIVADO
+  const { lang, t, formatCurrency } = useLanguage(); // ✅ formatCurrency EXTRAÍDO DO CONTEXTO
   const [activeMenu, setActiveMenu] = useState<MenuOption>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   
@@ -168,15 +168,16 @@ export default function Dashboard() {
     );
   }
 
+  // ✅ KPI CARDS COM CONVERSÃO DE MOEDA REAL
   const cards = [
     { 
       title: t.cards.revenue, 
-      value: `${lang === 'en' ? '$' : 'R$'} ${data.stats.faturamento_total.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR')}`, 
+      value: formatCurrency(data.stats.faturamento_total), // 💰 Conversão e Formatação Automática
       icon: DollarSign, color: "text-emerald-500", glow: "shadow-emerald-500/10" 
     },
     { 
       title: t.cards.profit, 
-      value: `${lang === 'en' ? '$' : 'R$'} ${data.financeiro.lucro_liquido.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR')}`, 
+      value: formatCurrency(data.financeiro.lucro_liquido), // 💰 Conversão e Formatação Automática
       icon: TrendingUp, color: "text-blue-500", glow: "shadow-blue-500/10" 
     },
     { 
@@ -267,7 +268,7 @@ export default function Dashboard() {
                   </button>
                 ))}
               </div>
-              <LanguageToggle /> {/* ✅ BOTÃO DE IDIOMA INCLUÍDO */}
+              <LanguageToggle />
               <ThemeToggle />
               <SimularPedidoButton />
             </div>

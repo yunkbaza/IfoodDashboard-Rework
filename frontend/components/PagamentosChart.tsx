@@ -17,7 +17,8 @@ interface PagamentoData {
 }
 
 export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
-  const { lang, t } = useLanguage(); //
+  // ✅ Extraindo formatCurrency para conversão real de valores
+  const { lang, t, formatCurrency } = useLanguage(); //
 
   // Paleta de alta visibilidade iFood
   const COLORS = [
@@ -61,13 +62,14 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
       
       <div className="flex-1 w-full min-h-0 relative">
         
-        {/* Indicador Central Dinâmico */}
+        {/* Indicador Central Dinâmico com Conversão Real */}
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none -translate-y-[10%]">
           <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
             {t.charts.pagamentos.total}
           </span>
           <span className="text-xl lg:text-2xl font-black dark:text-white tabular-nums">
-            {lang === 'en' ? '$' : 'R$'} {total.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR')}
+            {/* ✅ Valor Total convertido e formatado */}
+            {formatCurrency(total)}
           </span>
         </div>
 
@@ -112,7 +114,8 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
                         </p>
                       </div>
                       <p className="text-xl font-black text-[#EA1D2C] tabular-nums">
-                        {lang === 'en' ? '$' : 'R$'} {item.valor.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR')}
+                        {/* ✅ Valor Individual convertido e formatado */}
+                        {formatCurrency(item.valor)}
                       </p>
                       <p className="text-[9px] font-bold text-emerald-500 uppercase mt-1 italic">
                         {t.charts.pagamentos.share.replace('{percent}', percent)}
