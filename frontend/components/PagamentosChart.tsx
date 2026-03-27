@@ -18,47 +18,48 @@ interface PagamentoData {
 }
 
 export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
-  const { t, formatCurrency } = useLanguage();
+  const { lang, t, formatCurrency } = useLanguage();
 
   const COLORS = [
-    '#EA1D2C', // Vermelho Principal iFood
-    '#F8FAFC', // Branco Gelo
-    '#6366F1', // Indigo
-    '#FACC15', // Amarelo
-    '#94A3B8', // Slate
+    '#EA1D2C', // iFood Primary Red
+    '#F8FAFC', // Ice White
+    '#6366F1', // Electric Indigo
+    '#FACC15', // Gold Yellow
+    '#94A3B8', // Medium Slate
   ];
 
-  // 1. Função memorizada para traduzir e padronizar as chaves do backend
-  const getTranslatedMethod = useCallback((tipo: string) => {
+  // 1. Função memorizada para traduzir as chaves vindas do backend
+  const getTranslatedLabel = useCallback((tipo: string) => {
     const map: Record<string, string> = {
       'Cartão de Crédito': t.charts.pagamentos.methods.credit,
       'Cartão de Débito': t.charts.pagamentos.methods.debit,
       'Dinheiro': t.charts.pagamentos.methods.cash,
-      'cash': t.charts.pagamentos.methods.cash, // Captura variações comuns
+      'cash': t.charts.pagamentos.methods.cash, // Trata variação comum
       'PIX': t.charts.pagamentos.methods.pix
     };
     return map[tipo] || tipo;
   }, [t]);
 
-  // 2. AGRUPAMENTO: Soma valores duplicados para evitar fatias repetidas
+  // 2. AGRUPAMENTO: Soma os valores que pertencem à mesma categoria traduzida
+  // Isso remove as fatias duplicadas (ex: "Dinheiro" e "cash" viram um só)
   const processedData = useMemo(() => {
     const grouped = data.reduce((acc: Record<string, PagamentoData>, item) => {
-      const label = getTranslatedMethod(item.tipo);
-      if (!acc[label]) {
-        acc[label] = { tipo: label, valor: 0 };
+      const translatedLabel = getTranslatedLabel(item.tipo);
+      
+      if (!acc[translatedLabel]) {
+        acc[translatedLabel] = { tipo: translatedLabel, valor: 0 };
       }
-      acc[label].valor += item.valor;
+      acc[translatedLabel].valor += item.valor;
       return acc;
     }, {});
 
     return Object.values(grouped);
-  }, [data, getTranslatedMethod]);
+  }, [data, getTranslatedLabel]);
 
   const total = processedData.reduce((acc, entry) => acc + entry.valor, 0);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 w-full group">
-      
       <div className="mb-4 shrink-0">
         <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] mb-1">
           {t.charts.pagamentos.subtitle}
@@ -74,7 +75,6 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
       </div>
       
       <div className="flex-1 w-full min-h-0 relative">
-        
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none -translate-y-[10%]">
           <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
             {t.charts.pagamentos.total}
@@ -87,7 +87,7 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={processedData} // ✅ Usando os dados agrupados
+              data={processedData} // ✅ Agora usa os dados agrupados e únicos
               cx="50%" 
               cy="45%" 
               innerRadius="60%" 
@@ -128,7 +128,7 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
                         {formatCurrency(item.valor)}
                       </p>
                       <p className="text-[9px] font-bold text-emerald-500 uppercase mt-1 italic">
-                        {t.charts.pagamentos.share.replace('{percent}', percent)}
+                        {percent}% {t.charts.pagamentos.share}
                       </p>
                     </div>
                   );
@@ -160,7 +160,6 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
           </p>
         </div>
       </div>
-      
     </div>
   );
 }
