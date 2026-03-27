@@ -62,6 +62,9 @@ Acesse:
   * Frontend: `http://localhost:3000`
   * Backend (Docs): `http://localhost:8000/docs`
 
+  * Login: allan@dashboard.com
+  * Senha: admin123
+
 -----
 
 ## 📁 Estrutura do Projeto
