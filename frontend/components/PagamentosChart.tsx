@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback } from "react"; // ✅ Adicionado useCallback
+import { useMemo, useCallback } from "react"; //
 import { 
   PieChart, 
   Pie, 
@@ -8,9 +8,9 @@ import {
   Tooltip, 
   ResponsiveContainer, 
   Legend 
-} from 'recharts';
-import { CreditCard, ShieldCheck } from "lucide-react";
-import { useLanguage } from "../contexts/LanguageContext";
+} from 'recharts'; //
+import { CreditCard, ShieldCheck } from "lucide-react"; //
+import { useLanguage } from "../contexts/LanguageContext"; //
 
 interface PagamentoData { 
   tipo: string; 
@@ -18,29 +18,29 @@ interface PagamentoData {
 }
 
 export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
-  const { t, formatCurrency } = useLanguage();
+  const { t, formatCurrency } = useLanguage(); //
 
   const COLORS = [
-    '#EA1D2C', // iFood Primary Red
-    '#F8FAFC', // Ice White
+    '#EA1D2C', // Vermelho Principal
+    '#F8FAFC', // Branco Gelo
     '#6366F1', // Indigo
-    '#FACC15', // Gold Yellow
-    '#94A3B8', // Medium Slate
+    '#FACC15', // Amarelo
+    '#94A3B8', // Slate
   ];
 
-  // ✅ CORREÇÃO LINT: Função memorizada para satisfazer o compilador do React
+  // 1. Função de tradução memorizada para evitar erros de lint e duplicidade
   const getTranslatedMethod = useCallback((tipo: string) => {
     const map: Record<string, string> = {
       'Cartão de Crédito': t.charts.pagamentos.methods.credit,
       'Cartão de Débito': t.charts.pagamentos.methods.debit,
       'Dinheiro': t.charts.pagamentos.methods.cash,
-      'cash': t.charts.pagamentos.methods.cash, // Mapeia variação do backend
+      'cash': t.charts.pagamentos.methods.cash, // Mapeia variações comuns do backend
       'PIX': t.charts.pagamentos.methods.pix
     };
     return map[tipo] || tipo;
   }, [t]);
 
-  // ✅ CORREÇÃO AGRUPAMENTO: Soma valores duplicados e corrige dependências do useMemo
+  // 2. AGRUPAMENTO DOS DADOS: Soma valores que resultam na mesma tradução
   const processedData = useMemo(() => {
     const grouped = data.reduce((acc: Record<string, PagamentoData>, item) => {
       const label = getTranslatedMethod(item.tipo);
@@ -54,7 +54,7 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
     return Object.values(grouped);
   }, [data, getTranslatedMethod]);
 
-  const total = processedData.reduce((acc, entry) => acc + entry.valor, 0);
+  const total = processedData.reduce((acc, entry) => acc + entry.valor, 0); //
 
   return (
     <div className="flex-1 flex flex-col min-h-0 w-full group">
@@ -80,14 +80,14 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
             {t.charts.pagamentos.total}
           </span>
           <span className="text-xl lg:text-2xl font-black dark:text-white tabular-nums">
-            {formatCurrency(total)} {/* ✅ Conversão Real */}
+            {formatCurrency(total)}
           </span>
         </div>
 
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
             <Pie
-              data={processedData}
+              data={processedData} // Usando os dados agrupados
               cx="50%" 
               cy="45%" 
               innerRadius="60%" 
@@ -125,7 +125,7 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
                         </p>
                       </div>
                       <p className="text-xl font-black text-[#EA1D2C] tabular-nums">
-                        {formatCurrency(item.valor)} {/* ✅ Conversão Real */}
+                        {formatCurrency(item.valor)}
                       </p>
                       <p className="text-[9px] font-bold text-emerald-500 uppercase mt-1 italic">
                         {t.charts.pagamentos.share.replace('{percent}', percent)}
