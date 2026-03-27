@@ -4,24 +4,24 @@ import { useState } from "react";
 import { PlusCircle, Loader2 } from "lucide-react";
 import { simularPedido } from "../services/api";
 import { toast } from "sonner";
+import { useLanguage } from "../contexts/LanguageContext"; // ✅ Importado
 
 export default function SimularPedidoButton() {
   const [loading, setLoading] = useState(false);
+  const { t } = useLanguage(); // ✅ Hook de tradução ativado
 
   const handleSimularPedido = async () => {
     setLoading(true);
     try {
-      // Uses the centralized API service which automatically attaches the Bearer token
       await simularPedido();
-      toast.success("Transaction simulated successfully!");
+      toast.success(t.simulate.success); // ✅ Traduzido
       
-      // Forces a soft reload to fetch the new data without losing state
       window.location.reload(); 
     } catch (error: unknown) {
       if (error instanceof Error) {
-        toast.error(error.message || "Failed to communicate with the API.");
+        toast.error(t.simulate.errorApi); // ✅ Traduzido
       } else {
-        toast.error("Unknown error while simulating transaction.");
+        toast.error(t.simulate.errorUnknown); // ✅ Traduzido
       }
     } finally {
       setLoading(false);
@@ -39,7 +39,7 @@ export default function SimularPedidoButton() {
       ) : (
         <PlusCircle size={16} className="group-hover:rotate-90 transition-transform duration-300" />
       )}
-      <span>{loading ? "Processing..." : "Simulate Order"}</span>
+      <span>{loading ? t.simulate.processing : t.simulate.button}</span> {/* ✅ Traduzido */}
     </button>
   );
 }

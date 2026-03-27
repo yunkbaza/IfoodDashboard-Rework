@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import { Star, Sparkles, TrendingDown, AlertTriangle, CheckCircle2, Bot, ThumbsUp, ThumbsDown, Plus } from "lucide-react";
 import { getAnaliseIA, getAvaliacoes } from "../services/api";
 import SimularAvaliacaoModal from "./SimularAvaliacaoModal";
+import { useLanguage } from "../contexts/LanguageContext"; // ✅ IMPORTADO
 
-// ✅ 1. STRONG TYPING FOR FEEDBACKS
+// ✅ TIPAGEM PARA FEEDBACKS
 interface Feedback {
   id?: string | number;
   cliente: string;
@@ -15,7 +16,7 @@ interface Feedback {
   texto: string;
 }
 
-// ✅ 2. STRONG TYPING FOR AI RESPONSE
+// ✅ TIPAGEM PARA RESPOSTA DA IA
 interface Insight {
   tipo: 'TrendingDown' | 'AlertTriangle' | string;
   titulo: string;
@@ -24,20 +25,20 @@ interface Insight {
 }
 
 export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }) {
+  const { lang, t } = useLanguage(); // ✅ HOOK DE IDIOMA ATIVADO
   const [isAnalyzing, setIsAnalyzing] = useState(true);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Central function to fetch data from DB and request AI analysis
+  // Função central para buscar dados e solicitar análise de IA
   async function carregarDados() {
     setIsAnalyzing(true);
     try {
-      // ✅ 3. PERIOD USAGE: API now knows which date filter to apply
       const dadosBanco = await getAvaliacoes(periodo);
       setFeedbacks(dadosBanco);
 
-      // Send texts for Gemini analysis
+      // Envia textos para análise do Gemini
       if (dadosBanco && dadosBanco.length > 0) {
         const textosParaIA = dadosBanco.map((f: Feedback) => f.texto);
         const respostaIA = await getAnaliseIA(textosParaIA);
@@ -49,16 +50,16 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
       console.error("Error loading data:", error);
       setInsights([{
         tipo: "AlertTriangle",
-        titulo: "Sync Error",
-        reclamacao: "Could not connect to the database or AI engine.",
-        dica: "Ensure the backend service is running correctly."
+        titulo: lang === 'en' ? "Sync Error" : "Erro de Sincronização",
+        reclamacao: lang === 'en' ? "Could not connect to database." : "Não foi possível conectar ao banco.",
+        dica: lang === 'en' ? "Check backend." : "Verifique o backend."
       }]);
     } finally {
       setIsAnalyzing(false);
     }
   }
 
-  // ✅ 4. RELOADS WHENEVER THE PERIOD CHANGES AT THE TOP OF THE DASHBOARD
+  // Recarrega sempre que o período mudar no Dashboard
   useEffect(() => {
     carregarDados();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -68,26 +69,32 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
     <div className="space-y-6 animate-in fade-in duration-500">
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Customer Voice</h2>
-          <p className="text-sm text-slate-500 dark:text-[#8E8E93]">Real feedback extracted from the database and analyzed by the AI Assistant.</p>
+          <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+            {t.feedbacks.title}
+          </h2>
+          <p className="text-sm text-slate-500 dark:text-[#8E8E93]">
+            {t.feedbacks.subtitle}
+          </p>
         </div>
         
-        {/* SIMULATION BUTTON */}
+        {/* BOTÃO DE SIMULAÇÃO TRADUZIDO */}
         <button 
           onClick={() => setIsModalOpen(true)}
           className="flex items-center gap-2 bg-[#EA1D2C] text-white px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-red-500/20"
         >
-          <Plus size={18} /> New Simulation
+          <Plus size={18} /> {t.feedbacks.newSimulation}
         </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* LEFT COLUMN: DB COMMENTS */}
+        {/* COLUNA ESQUERDA: COMENTÁRIOS DO BANCO */}
         <div className="lg:col-span-2 space-y-4">
           {feedbacks.length === 0 && !isAnalyzing && (
             <div className="p-12 text-center border-2 border-dashed border-slate-200 dark:border-[#2C2C2E] rounded-[40px] bg-slate-50/50 dark:bg-transparent">
-              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em]">The database is empty. Use the button above to simulate.</p>
+              <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em]">
+                {t.feedbacks.empty}
+              </p>
             </div>
           )}
 
@@ -96,7 +103,6 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
               key={fb.id || index} 
               className="bg-white dark:bg-[#1C1C1E] p-6 rounded-3xl border border-slate-100 dark:border-[#2C2C2E] shadow-sm flex gap-4 hover:border-[#EA1D2C]/30 transition-all group"
             >
-              {/* ✅ TAILWIND FIX: shrink-0 */}
               <div className="shrink-0 pt-1">
                 <div className="w-12 h-12 rounded-full bg-slate-50 dark:bg-[#2C2C2E] border border-slate-100 dark:border-[#3C3C3E] flex items-center justify-center font-black text-slate-600 dark:text-slate-300 group-hover:scale-110 transition-transform">
                   {fb.cliente.charAt(0)}
@@ -109,11 +115,11 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
                       {fb.cliente}
                       <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${fb.sentimento === 'positivo' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
                         {fb.sentimento === 'positivo' ? <ThumbsUp size={10} /> : <ThumbsDown size={10} />}
-                        {fb.sentimento === 'positivo' ? 'Positive' : 'Negative'}
+                        {fb.sentimento === 'positivo' ? t.feedbacks.positive : t.feedbacks.negative}
                       </span>
                     </h4>
                     <span className="text-xs font-medium text-slate-400">
-                      {new Date(fb.data).toLocaleDateString('en-US')}
+                      {new Date(fb.data).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR')}
                     </span>
                   </div>
                   <div className="flex gap-1 bg-slate-50 dark:bg-[#242426] p-1.5 rounded-lg border border-slate-100 dark:border-[#3C3C3E]">
@@ -128,9 +134,8 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
           ))}
         </div>
 
-        {/* RIGHT COLUMN: VIRTUAL ASSISTANT (GEMINI 2.5) */}
+        {/* COLUNA DIREITA: ASSISTENTE VIRTUAL (GEMINI) */}
         <div className="lg:col-span-1">
-          {/* ✅ TAILWIND FIX: min-h-125 */}
           <div className="bg-white dark:bg-[#1C1C1E] p-6 rounded-3xl border-t-4 border-t-[#EA1D2C] border-x border-b border-slate-100 dark:border-x-[#2C2C2E] dark:border-b-[#2C2C2E] shadow-xl relative overflow-hidden h-full flex flex-col min-h-125">
             
             <div className="flex items-center gap-3 mb-6">
@@ -138,7 +143,9 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
                 <Bot size={24} className="text-[#EA1D2C]" />
               </div>
               <div>
-                <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tight">AI Assistant</h3>
+                <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                  {t.feedbacks.aiAssistant}
+                </h3>
                 <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest flex items-center gap-1">
                   <Sparkles size={10} className="text-amber-500" /> Powered by Gemini 2.5
                 </p>
@@ -152,12 +159,16 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
                   <div className="absolute inset-0 border-4 border-[#EA1D2C] border-t-transparent rounded-full animate-spin"></div>
                   <Bot size={28} className="text-[#EA1D2C] animate-pulse" />
                 </div>
-                <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] animate-pulse">Analyzing database...</p>
+                <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] animate-pulse">
+                  {t.feedbacks.analyzing}
+                </p>
               </div>
             ) : (
               <div className="space-y-6 flex-1 flex flex-col justify-between">
                 <div>
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-6">Insights generated based on recent feedback:</p>
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-6">
+                    {t.feedbacks.insightsTitle}
+                  </p>
 
                   <div className="space-y-4">
                     {insights.map((insight, index) => (
@@ -170,11 +181,11 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
                         </div>
                         
                         <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mb-3">
-                          <span className="font-bold text-slate-800 dark:text-slate-200">Context:</span> {insight.reclamacao}
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{t.feedbacks.context}:</span> {insight.reclamacao}
                         </p>
                         <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
                            <p className="text-[10px] text-emerald-700 dark:text-emerald-400 leading-tight">
-                             <span className="font-black uppercase tracking-tighter mr-1">Recommendation:</span> {insight.dica}
+                             <span className="font-black uppercase tracking-tighter mr-1">{t.feedbacks.recommendation}:</span> {insight.dica}
                            </p>
                         </div>
                       </div>
@@ -183,7 +194,7 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
                 </div>
 
                 <button className="w-full mt-6 py-4 bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 hover:opacity-90 transition-all">
-                  <CheckCircle2 size={16} /> Acknowledge
+                  <CheckCircle2 size={16} /> {t.feedbacks.acknowledge}
                 </button>
               </div>
             )}
@@ -192,11 +203,11 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
 
       </div>
 
-      {/* SIMULATION MODAL */}
+      {/* MODAL DE SIMULAÇÃO */}
       <SimularAvaliacaoModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        onSuccess={carregarDados} // Reloads the list and AI when closing
+        onSuccess={carregarDados} 
       />
     </div>
   );
