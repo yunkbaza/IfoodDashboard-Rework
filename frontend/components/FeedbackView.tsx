@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Star, Sparkles, TrendingDown, AlertTriangle, CheckCircle2, Bot, ThumbsUp, ThumbsDown, Plus } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Star, Sparkles, TrendingDown, AlertTriangle, CheckCircle2, Bot, ThumbsUp, ThumbsDown, Plus, Loader2 } from "lucide-react";
 import { getAnaliseIA, getAvaliacoes } from "../services/api";
 import SimularAvaliacaoModal from "./SimularAvaliacaoModal";
-import { useLanguage } from "../contexts/LanguageContext"; // ✅ IMPORTADO
+import { useLanguage } from "../contexts/LanguageContext";
 
 // ✅ TIPAGEM PARA FEEDBACKS
 interface Feedback {
@@ -24,21 +24,21 @@ interface Insight {
   dica: string;
 }
 
-export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }) {
-  const { lang, t } = useLanguage(); // ✅ HOOK DE IDIOMA ATIVADO
+export default function FeedbackView({ periodo = '7dias', lojaId }: { periodo?: string; lojaId?: number }) {
+  const { lang, t } = useLanguage();
   const [isAnalyzing, setIsAnalyzing] = useState(true);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Função central para buscar dados e solicitar análise de IA
-  async function carregarDados() {
+  // ✅ FUNÇÃO CARREGAR DADOS OTIMIZADA PARA MULTI-LOJA
+  const carregarDados = useCallback(async () => {
     setIsAnalyzing(true);
     try {
-      const dadosBanco = await getAvaliacoes(periodo);
+      // ✅ Agora envia o lojaId para buscar avaliações específicas da unidade
+      const dadosBanco = await getAvaliacoes(periodo, lojaId); 
       setFeedbacks(dadosBanco);
 
-      // Envia textos para análise do Gemini
       if (dadosBanco && dadosBanco.length > 0) {
         const textosParaIA = dadosBanco.map((f: Feedback) => f.texto);
         const respostaIA = await getAnaliseIA(textosParaIA);
@@ -47,7 +47,6 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
         setInsights([]);
       }
     } catch (error) {
-      console.error("Error loading data:", error);
       setInsights([{
         tipo: "AlertTriangle",
         titulo: lang === 'en' ? "Sync Error" : "Erro de Sincronização",
@@ -57,19 +56,17 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
     } finally {
       setIsAnalyzing(false);
     }
-  }
+  }, [periodo, lojaId, lang]); // ✅ lojaId adicionado como dependência
 
-  // Recarrega sempre que o período mudar no Dashboard
   useEffect(() => {
     carregarDados();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodo]);
+  }, [carregarDados]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex justify-between items-end mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 mb-8">
         <div>
-          <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+          <h2 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight italic">
             {t.feedbacks.title}
           </h2>
           <p className="text-sm text-slate-500 dark:text-[#8E8E93]">
@@ -77,7 +74,6 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
           </p>
         </div>
         
-        {/* BOTÃO DE SIMULAÇÃO TRADUZIDO */}
         <button 
           onClick={() => setIsModalOpen(true)}
           className="flex items-center gap-2 bg-[#EA1D2C] text-white px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-lg shadow-red-500/20"
@@ -88,10 +84,10 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* COLUNA ESQUERDA: COMENTÁRIOS DO BANCO */}
+        {/* COLUNA ESQUERDA: LISTA DE COMENTÁRIOS */}
         <div className="lg:col-span-2 space-y-4">
           {feedbacks.length === 0 && !isAnalyzing && (
-            <div className="p-12 text-center border-2 border-dashed border-slate-200 dark:border-[#2C2C2E] rounded-[40px] bg-slate-50/50 dark:bg-transparent">
+            <div className="p-12 text-center border-2 border-dashed border-slate-200 dark:border-white/5 rounded-[40px] bg-white dark:bg-[#111113]">
               <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.2em]">
                 {t.feedbacks.empty}
               </p>
@@ -101,17 +97,17 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
           {feedbacks.map((fb, index) => (
             <div 
               key={fb.id || index} 
-              className="bg-white dark:bg-[#1C1C1E] p-6 rounded-3xl border border-slate-100 dark:border-[#2C2C2E] shadow-sm flex gap-4 hover:border-[#EA1D2C]/30 transition-all group"
+              className="bg-white dark:bg-[#111113] p-6 rounded-3xl border border-slate-100 dark:border-white/5 shadow-sm flex gap-4 hover:border-[#EA1D2C]/30 transition-all group"
             >
               <div className="shrink-0 pt-1">
-                <div className="w-12 h-12 rounded-full bg-slate-50 dark:bg-[#2C2C2E] border border-slate-100 dark:border-[#3C3C3E] flex items-center justify-center font-black text-slate-600 dark:text-slate-300 group-hover:scale-110 transition-transform">
+                <div className="w-12 h-12 rounded-full bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 flex items-center justify-center font-black text-slate-600 dark:text-slate-300 group-hover:scale-110 transition-transform uppercase">
                   {fb.cliente.charAt(0)}
                 </div>
               </div>
               <div className="flex-1">
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <h4 className="font-bold text-slate-900 dark:text-white flex flex-wrap items-center gap-2">
                       {fb.cliente}
                       <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${fb.sentimento === 'positivo' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
                         {fb.sentimento === 'positivo' ? <ThumbsUp size={10} /> : <ThumbsDown size={10} />}
@@ -122,9 +118,9 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
                       {new Date(fb.data).toLocaleDateString(lang === 'en' ? 'en-US' : 'pt-BR')}
                     </span>
                   </div>
-                  <div className="flex gap-1 bg-slate-50 dark:bg-[#242426] p-1.5 rounded-lg border border-slate-100 dark:border-[#3C3C3E]">
+                  <div className="flex gap-1 bg-slate-50 dark:bg-white/5 p-1.5 rounded-lg border border-slate-100 dark:border-white/10">
                     {[1, 2, 3, 4, 5].map((star) => (
-                      <Star key={star} size={14} className={star <= fb.nota ? "fill-yellow-400 text-yellow-400" : "text-slate-200 dark:text-slate-700"} />
+                      <Star key={star} size={14} className={star <= fb.nota ? "fill-yellow-400 text-yellow-400" : "text-slate-200 dark:text-slate-800"} />
                     ))}
                   </div>
                 </div>
@@ -134,9 +130,9 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
           ))}
         </div>
 
-        {/* COLUNA DIREITA: ASSISTENTE VIRTUAL (GEMINI) */}
+        {/* COLUNA DIREITA: AUDITORIA IA (GEMINI) */}
         <div className="lg:col-span-1">
-          <div className="bg-white dark:bg-[#1C1C1E] p-6 rounded-3xl border-t-4 border-t-[#EA1D2C] border-x border-b border-slate-100 dark:border-x-[#2C2C2E] dark:border-b-[#2C2C2E] shadow-xl relative overflow-hidden h-full flex flex-col min-h-125">
+          <div className="bg-white dark:bg-[#111113] p-6 rounded-3xl border-t-4 border-t-[#EA1D2C] border-x border-b border-slate-100 dark:border-white/5 shadow-xl h-full flex flex-col min-h-100">
             
             <div className="flex items-center gap-3 mb-6">
               <div className="bg-red-50 dark:bg-[#EA1D2C]/10 p-2.5 rounded-xl border border-red-100 dark:border-[#EA1D2C]/20">
@@ -146,33 +142,29 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
                 <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tight">
                   {t.feedbacks.aiAssistant}
                 </h3>
-                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest flex items-center gap-1">
-                  <Sparkles size={10} className="text-amber-500" /> Powered by Gemini 2.5
+                <p className="text-[10px] text-[#EA1D2C] uppercase font-bold tracking-widest flex items-center gap-1">
+                  <Sparkles size={10} className="text-amber-500" /> Powered by Gemini
                 </p>
               </div>
             </div>
 
             {isAnalyzing ? (
               <div className="flex flex-col items-center justify-center flex-1 space-y-6 py-10">
-                <div className="relative flex items-center justify-center w-20 h-20">
-                  <div className="absolute inset-0 border-4 border-slate-100 dark:border-[#2C2C2E] rounded-full"></div>
-                  <div className="absolute inset-0 border-4 border-[#EA1D2C] border-t-transparent rounded-full animate-spin"></div>
-                  <Bot size={28} className="text-[#EA1D2C] animate-pulse" />
-                </div>
-                <p className="text-xs font-black text-slate-400 uppercase tracking-[0.2em] animate-pulse">
+                <Loader2 className="animate-spin text-[#EA1D2C]" size={32} />
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] animate-pulse">
                   {t.feedbacks.analyzing}
                 </p>
               </div>
             ) : (
               <div className="space-y-6 flex-1 flex flex-col justify-between">
                 <div>
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-6">
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-400 mb-6 italic">
                     {t.feedbacks.insightsTitle}
                   </p>
 
                   <div className="space-y-4">
                     {insights.map((insight, index) => (
-                      <div key={index} className="bg-slate-50 dark:bg-[#242426] p-4.5 rounded-2xl border border-slate-100 dark:border-[#2C2C2E] relative overflow-hidden group hover:border-[#EA1D2C]/20 transition-all">
+                      <div key={index} className="bg-slate-50 dark:bg-white/5 p-4.5 rounded-2xl border border-slate-100 dark:border-white/10 relative overflow-hidden group hover:border-[#EA1D2C]/20 transition-all">
                         <div className={`absolute left-0 top-0 bottom-0 w-1 ${insight.tipo === 'TrendingDown' ? 'bg-orange-500' : 'bg-red-500'}`}></div>
                         
                         <div className={`flex items-center gap-2 mb-3 font-bold text-[10px] uppercase tracking-wider ${insight.tipo === 'TrendingDown' ? 'text-orange-600' : 'text-red-600'}`}>
@@ -184,16 +176,22 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
                           <span className="font-bold text-slate-800 dark:text-slate-200">{t.feedbacks.context}:</span> {insight.reclamacao}
                         </p>
                         <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
-                           <p className="text-[10px] text-emerald-700 dark:text-emerald-400 leading-tight">
+                           <p className="text-[10px] text-emerald-700 dark:text-emerald-400 leading-tight italic">
                              <span className="font-black uppercase tracking-tighter mr-1">{t.feedbacks.recommendation}:</span> {insight.dica}
                            </p>
                         </div>
                       </div>
                     ))}
+                    {insights.length === 0 && (
+                      <div className="text-center py-10 opacity-40">
+                         <Bot size={40} className="mx-auto mb-2 text-slate-300" />
+                         <p className="text-[10px] font-black uppercase tracking-widest">{t.feedbacks.empty}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <button className="w-full mt-6 py-4 bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 hover:opacity-90 transition-all">
+                <button className="w-full mt-6 py-4 bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 hover:opacity-90 transition-all shadow-sm">
                   <CheckCircle2 size={16} /> {t.feedbacks.acknowledge}
                 </button>
               </div>
@@ -203,11 +201,11 @@ export default function FeedbackView({ periodo = '7dias' }: { periodo?: string }
 
       </div>
 
-      {/* MODAL DE SIMULAÇÃO */}
       <SimularAvaliacaoModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
         onSuccess={carregarDados} 
+        lojaId={lojaId} // ✅ Propriedade injetada para simular na loja correta
       />
     </div>
   );

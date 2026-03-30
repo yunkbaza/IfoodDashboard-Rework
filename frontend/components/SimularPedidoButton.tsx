@@ -4,24 +4,34 @@ import { useState } from "react";
 import { PlusCircle, Loader2 } from "lucide-react";
 import { simularPedido } from "../services/api";
 import { toast } from "sonner";
-import { useLanguage } from "../contexts/LanguageContext"; // ✅ Importado
+import { useLanguage } from "../contexts/LanguageContext";
 
-export default function SimularPedidoButton() {
+interface Props {
+  lojaId?: number; // ✅ Adicionado para suporte Multi-loja
+}
+
+export default function SimularPedidoButton({ lojaId }: Props) {
   const [loading, setLoading] = useState(false);
-  const { t } = useLanguage(); // ✅ Hook de tradução ativado
+  const { t } = useLanguage();
 
   const handleSimularPedido = async () => {
     setLoading(true);
     try {
-      await simularPedido();
-      toast.success(t.simulate.success); // ✅ Traduzido
+      // ✅ Envia o lojaId para que o pedido não fique "órfão" no banco
+      await simularPedido(lojaId);
       
-      window.location.reload(); 
+      toast.success(t.simulate.success, {
+        description: lojaId ? "Pedido vinculado à unidade selecionada." : "Pedido gerado na unidade padrão."
+      });
+      
+      // 💡 Removido window.location.reload()
+      // O WebSocket no seu Dashboard já detecta o novo pedido e atualiza os gráficos em tempo real!
+      
     } catch (error: unknown) {
       if (error instanceof Error) {
-        toast.error(t.simulate.errorApi); // ✅ Traduzido
+        toast.error(t.simulate.errorApi);
       } else {
-        toast.error(t.simulate.errorUnknown); // ✅ Traduzido
+        toast.error(t.simulate.errorUnknown);
       }
     } finally {
       setLoading(false);
@@ -32,14 +42,16 @@ export default function SimularPedidoButton() {
     <button 
       onClick={handleSimularPedido}
       disabled={loading}
-      className="group flex items-center gap-2 bg-[#111113] dark:bg-[#EA1D2C] text-white hover:bg-black dark:hover:bg-[#EA1D2C] dark:hover:text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm hover:shadow-[0_0_20px_rgba(234,29,44,0.4)] disabled:opacity-50 disabled:hover:bg-[#111113] hover:scale-[1.02] active:scale-95"
+      className="group flex items-center gap-2 bg-slate-900 dark:bg-[#EA1D2C] text-white px-5 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all shadow-lg shadow-black/10 dark:shadow-red-500/20 hover:scale-[1.02] active:scale-95 disabled:opacity-50"
     >
       {loading ? (
-        <Loader2 size={16} className="animate-spin" />
+        <Loader2 size={16} className="animate-spin text-[#EA1D2C] dark:text-white" />
       ) : (
-        <PlusCircle size={16} className="group-hover:rotate-90 transition-transform duration-300" />
+        <PlusCircle size={16} className="group-hover:rotate-90 transition-transform duration-300 text-[#EA1D2C] dark:text-white" />
       )}
-      <span>{loading ? t.simulate.processing : t.simulate.button}</span> {/* ✅ Traduzido */}
+      <span className="dark:text-white">
+        {loading ? t.simulate.processing : t.simulate.button}
+      </span>
     </button>
   );
 }

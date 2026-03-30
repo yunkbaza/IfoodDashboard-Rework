@@ -1,6 +1,6 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://ifood-dashboard-api.onrender.com/api";
 
-// --- INTERFACES DE DADOS (TIPAGEM ESTRITA) ---
+// --- INTERFACES DE DADOS ---
 
 export interface RegisterData {
   nome: string;
@@ -19,11 +19,18 @@ export interface AvaliacaoCreateData {
   nota: number;
   texto: string;
   sentimento: string;
+  loja_id?: number;
+}
+
+export interface LojaData {
+  id: number;
+  nome: string;
+  cnpj?: string;
+  cidade?: string;
 }
 
 /**
  * Helper para gerir autenticação e headers globais.
- * Captura o token do localStorage para validar todas as rotas protegidas.
  */
 function getAuthHeaders() {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -32,6 +39,16 @@ function getAuthHeaders() {
     ...(token ? { 'Authorization': `Bearer ${token}` } : {})
   };
 }
+
+/**
+ * Helper para construir URLs com filtros de período e loja (Multi-loja)
+ */
+const buildUrl = (endpoint: string, periodo?: string, lojaId?: number) => {
+  const url = new URL(`${API_URL}${endpoint}`);
+  if (periodo) url.searchParams.append('periodo', periodo);
+  if (lojaId) url.searchParams.append('loja_id', lojaId.toString());
+  return url.toString();
+};
 
 // ==========================================
 // 🔑 MÓDULO: AUTENTICAÇÃO
@@ -68,83 +85,111 @@ export async function registrar(userData: RegisterData) {
 }
 
 // ==========================================
+// 🏢 MÓDULO: GESTÃO DE LOJAS
+// ==========================================
+
+export async function getLojas(): Promise<LojaData[]> {
+  const res = await fetch(`${API_URL}/lojas`, { 
+    cache: 'no-store', headers: getAuthHeaders() 
+  });
+  if (!res.ok) throw new Error('Falha ao buscar lista de lojas');
+  return res.json();
+}
+
+// ==========================================
 // 📊 MÓDULO: DASHBOARD (MÉTRICAS)
 // ==========================================
 
-export async function getDashboardStats(periodo: string = '7dias') {
-  const res = await fetch(`${API_URL}/dashboard/stats?periodo=${periodo}`, { 
+export async function getDashboardStats(periodo: string = '7dias', lojaId?: number) {
+  const res = await fetch(buildUrl('/dashboard/stats', periodo, lojaId), { 
     cache: 'no-store', headers: getAuthHeaders() 
   });
   if (!res.ok) throw new Error('Falha ao buscar estatísticas');
   return res.json();
 }
 
-export async function getFinanceiro(periodo: string = '7dias') {
-  const res = await fetch(`${API_URL}/dashboard/financeiro?periodo=${periodo}`, { 
+export async function getFinanceiro(periodo: string = '7dias', lojaId?: number) {
+  const res = await fetch(buildUrl('/dashboard/financeiro', periodo, lojaId), { 
     cache: 'no-store', headers: getAuthHeaders()
   });
   if (!res.ok) throw new Error('Falha ao buscar dados financeiros');
   return res.json();
 }
 
-export async function getVendasDiarias(periodo: string = '7dias') {
-  const res = await fetch(`${API_URL}/dashboard/vendas-diarias?periodo=${periodo}`, { 
+export async function getVendasDiarias(periodo: string = '7dias', lojaId?: number) {
+  const res = await fetch(buildUrl('/dashboard/vendas-diarias', periodo, lojaId), { 
     cache: 'no-store', headers: getAuthHeaders()
   });
   if (!res.ok) throw new Error('Falha ao buscar vendas diárias');
   return res.json();
 }
 
-export async function getTopProdutos(periodo: string = '7dias') {
-  const res = await fetch(`${API_URL}/dashboard/top-produtos?periodo=${periodo}`, { 
+export async function getTopProdutos(periodo: string = '7dias', lojaId?: number) {
+  const res = await fetch(buildUrl('/dashboard/top-produtos', periodo, lojaId), { 
     cache: 'no-store', headers: getAuthHeaders()
   });
   if (!res.ok) throw new Error('Falha ao buscar top produtos');
   return res.json();
 }
 
-export async function getStatsBairros(periodo: string = '7dias') {
-  const res = await fetch(`${API_URL}/dashboard/bairros?periodo=${periodo}`, { 
+export async function getStatsBairros(periodo: string = '7dias', lojaId?: number) {
+  const res = await fetch(buildUrl('/dashboard/bairros', periodo, lojaId), { 
     cache: 'no-store', headers: getAuthHeaders() 
   });
   if (!res.ok) throw new Error('Falha ao buscar estatísticas por bairro');
   return res.json();
 }
 
-export async function getStatsHorarios(periodo: string = '7dias') {
-  const res = await fetch(`${API_URL}/dashboard/horarios?periodo=${periodo}`, { 
+export async function getStatsHorarios(periodo: string = '7dias', lojaId?: number) {
+  const res = await fetch(buildUrl('/dashboard/horarios', periodo, lojaId), { 
     cache: 'no-store', headers: getAuthHeaders() 
   });
   if (!res.ok) throw new Error('Falha ao buscar horários de pico');
   return res.json();
 }
 
-export async function getStatsPagamentos(periodo: string = '7dias') {
-  const res = await fetch(`${API_URL}/dashboard/pagamentos?periodo=${periodo}`, { 
+export async function getStatsPagamentos(periodo: string = '7dias', lojaId?: number) {
+  const res = await fetch(buildUrl('/dashboard/pagamentos', periodo, lojaId), { 
     cache: 'no-store', headers: getAuthHeaders() 
   });
   if (!res.ok) throw new Error('Falha ao buscar métodos de pagamento');
   return res.json();
 }
 
-export async function getMetaAnual(): Promise<MetaAnualData> {
-  const res = await fetch(`${API_URL}/dashboard/meta`, { 
-    cache: 'no-store', 
+export async function getMetaAnual(lojaId?: number): Promise<MetaAnualData> {
+  const res = await fetch(buildUrl('/dashboard/meta', undefined, lojaId), { 
+    cache: 'no-store', headers: getAuthHeaders() 
+  });
+  if (!res.ok) throw new Error('Falha ao buscar meta anual');
+  return res.json();
+}
+
+// ==========================================
+// 📥 MÓDULO: EXPORTAÇÃO
+// ==========================================
+
+export async function downloadRelatorio(periodo: string = '7dias', lojaId?: number) {
+  const res = await fetch(buildUrl('/dashboard/exportar', periodo, lojaId), { 
     headers: getAuthHeaders() 
   });
+  if (!res.ok) throw new Error('Erro ao gerar relatório');
   
-  if (res.status === 401) throw new Error('Sessão expirada. Faça login novamente.');
-  if (!res.ok) throw new Error('Falha ao buscar meta anual');
-  
-  return res.json();
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `relatorio_ifood_${periodo}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 // ==========================================
 // 📦 MÓDULO: OPERAÇÃO (KANBAN)
 // ==========================================
 
-export async function getPedidos(periodo: string = '7dias') {
-  const res = await fetch(`${API_URL}/pedidos?periodo=${periodo}`, { 
+export async function getPedidos(periodo: string = '7dias', lojaId?: number) {
+  const res = await fetch(buildUrl('/pedidos', periodo, lojaId), { 
     cache: 'no-store', headers: getAuthHeaders() 
   });
   if (!res.ok) throw new Error('Falha ao buscar a lista de pedidos');
@@ -161,8 +206,8 @@ export async function atualizarStatusPedido(idPedido: string, novoStatus: string
   return res.json();
 }
 
-export async function simularPedido() {
-  const res = await fetch(`${API_URL}/pedidos/simular`, {
+export async function simularPedido(lojaId?: number) {
+  const res = await fetch(buildUrl('/pedidos/simular', undefined, lojaId), {
     method: 'POST',
     headers: getAuthHeaders()
   });
@@ -174,8 +219,8 @@ export async function simularPedido() {
 // 🤖 MÓDULO: FEEDBACK & IA
 // ==========================================
 
-export async function getAvaliacoes(periodo: string = '7dias') {
-  const res = await fetch(`${API_URL}/avaliacoes?periodo=${periodo}`, { 
+export async function getAvaliacoes(periodo: string = '7dias', lojaId?: number) {
+  const res = await fetch(buildUrl('/avaliacoes', periodo, lojaId), { 
     cache: 'no-store', headers: getAuthHeaders() 
   });
   if (!res.ok) throw new Error('Falha ao buscar avaliações');

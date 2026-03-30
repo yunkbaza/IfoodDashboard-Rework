@@ -17,7 +17,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { getPedidos, atualizarStatusPedido } from "../services/api";
 import { Clock, ChefHat, CheckCircle2, Loader2, RefreshCcw, MapPin, CreditCard } from "lucide-react";
 import { toast } from "sonner";
-import { useLanguage } from "../contexts/LanguageContext"; // ✅ IMPORTADO
+import { useLanguage } from "../contexts/LanguageContext";
 
 // TYPING
 export interface Pedido {
@@ -34,7 +34,7 @@ export interface Pedido {
 // 🃏 COMPONENT: ORDER CARD (DRAGGABLE)
 // ==========================================
 function KanbanCard({ pedido }: { pedido: Pedido }) {
-  const { lang, t, formatCurrency } = useLanguage();
+  const { t, formatCurrency } = useLanguage();
   const { 
     attributes, listeners, setNodeRef, transform, transition, isDragging 
   } = useSortable({
@@ -50,12 +50,12 @@ function KanbanCard({ pedido }: { pedido: Pedido }) {
 
   const translatedPayment = (method: string) => {
     const map: Record<string, string> = {
-      'Cartão de Crédito': t.charts.pagamentos.methods.credit,
-      'Cartão de Débito': t.charts.pagamentos.methods.debit,
-      'Dinheiro': t.charts.pagamentos.methods.cash,
+      'CARTÃO DE CRÉDITO': t.charts.pagamentos.methods.credit,
+      'CARTÃO DE DÉBITO': t.charts.pagamentos.methods.debit,
+      'DINHEIRO': t.charts.pagamentos.methods.cash,
       'PIX': t.charts.pagamentos.methods.pix
     };
-    return map[method] || method;
+    return map[method.toUpperCase()] || method;
   };
 
   return (
@@ -64,7 +64,7 @@ function KanbanCard({ pedido }: { pedido: Pedido }) {
       style={style} 
       {...attributes} 
       {...listeners} 
-      className="bg-white dark:bg-[#111113] p-5 rounded-3xl shadow-sm border border-slate-200 dark:border-white/5 cursor-grab active:cursor-grabbing hover:border-[#EA1D2C]/40 hover:shadow-md transition-all group relative overflow-hidden"
+      className="bg-white dark:bg-[#111113] p-5 rounded-3xl shadow-sm border border-slate-200 dark:border-white/5 cursor-grab active:cursor-grabbing hover:border-[#EA1D2C]/40 hover:shadow-md transition-all group relative overflow-hidden mb-4"
     >
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${pedido.status === 'PENDENTE' ? 'bg-[#EA1D2C]' : pedido.status === 'PREPARANDO' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
       
@@ -118,7 +118,7 @@ function KanbanColumn({ id, title, icon: Icon, theme, pedidos, limitInfo }: Colu
   };
 
   return (
-    <div className="flex flex-col bg-slate-50 dark:bg-white/5 rounded-[40px] p-6 border border-slate-200 dark:border-white/5 h-full">
+    <div className="flex flex-col bg-slate-50 dark:bg-white/5 rounded-[40px] p-6 border border-slate-200 dark:border-white/5 h-full min-h-[600px]">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <div className={`p-3 rounded-2xl ${themeStyles[theme].bg} ${themeStyles[theme].text}`}>
@@ -132,7 +132,7 @@ function KanbanColumn({ id, title, icon: Icon, theme, pedidos, limitInfo }: Colu
       </div>
 
       <SortableContext items={pedidos.map(p => p.id_pedido)}>
-        <div ref={setNodeRef} className="flex-1 flex flex-col gap-4 min-h-[500px] overflow-y-auto custom-scrollbar pr-2 pb-4">
+        <div ref={setNodeRef} className="flex-1 flex flex-col min-h-[400px] overflow-y-auto custom-scrollbar pr-2 pb-4">
           {pedidos.map(p => <KanbanCard key={p.id_pedido} pedido={p} />)}
           
           {pedidos.length === 0 && (
@@ -155,8 +155,8 @@ function KanbanColumn({ id, title, icon: Icon, theme, pedidos, limitInfo }: Colu
 // ==========================================
 // 🚀 MAIN COMPONENT: KANBAN BOARD
 // ==========================================
-export default function KanbanBoard({ periodo }: { periodo: string }) {
-  const { t, lang } = useLanguage();
+export default function KanbanBoard({ periodo, lojaId }: { periodo: string; lojaId?: number }) {
+  const { t } = useLanguage();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
@@ -168,14 +168,14 @@ export default function KanbanBoard({ periodo }: { periodo: string }) {
 
   const fetchPedidos = useCallback(async () => {
     try {
-      const data = await getPedidos(periodo);
+      const data = await getPedidos(periodo, lojaId); // ✅ Agora envia o lojaId
       setPedidos(data);
     } catch (error) {
       toast.error(t.kanban.toasts.syncError);
     } finally {
       setLoading(false);
     }
-  }, [periodo, t.kanban.toasts.syncError]);
+  }, [periodo, lojaId, t.kanban.toasts.syncError]); // ✅ Adicionado lojaId como dependência
 
   useEffect(() => {
     fetchPedidos();
@@ -216,7 +216,6 @@ export default function KanbanBoard({ periodo }: { periodo: string }) {
     if (!pedidoArrastado) return;
 
     const statusAntigo = pedidoArrastado.status || 'PENDENTE';
-    
     const colunasValidas = ["PENDENTE", "PREPARANDO", "CONCLUIDO"];
     let statusNovo = statusAntigo;
 
@@ -260,7 +259,6 @@ export default function KanbanBoard({ periodo }: { periodo: string }) {
 
   return (
     <div className="h-full flex flex-col animate-in fade-in duration-500">
-      
       <div className="flex items-center gap-3 mb-8 px-5 py-3 bg-slate-50 dark:bg-[#111113] border border-slate-200 dark:border-white/5 rounded-2xl w-fit shadow-sm">
         <span className="relative flex h-3 w-3">
           {isLive && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
@@ -283,22 +281,17 @@ export default function KanbanBoard({ periodo }: { periodo: string }) {
             id="PENDENTE" title={t.kanban.columns.pending} icon={Clock} theme="danger" 
             pedidos={pedidos.filter(p => p.status === "PENDENTE" || !p.status)} 
           />
-
           <KanbanColumn 
             id="PREPARANDO" title={t.kanban.columns.preparing} icon={ChefHat} theme="warning" 
             pedidos={pedidos.filter(p => p.status === "PREPARANDO")} 
           />
-
           <KanbanColumn 
             id="CONCLUIDO" title={t.kanban.columns.completed} icon={CheckCircle2} theme="success" 
             pedidos={pedidos.filter(p => p.status === "CONCLUIDO").slice(0, 10)} 
             limitInfo={t.kanban.limit}
           />
         </div>
-
-        <DragOverlay>
-          {activePedido ? <KanbanCard pedido={activePedido} /> : null}
-        </DragOverlay>
+        <DragOverlay>{activePedido ? <KanbanCard pedido={activePedido} /> : null}</DragOverlay>
       </DndContext>
     </div>
   );

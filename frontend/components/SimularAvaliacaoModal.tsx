@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Star, Send, MessageSquarePlus, Loader2 } from "lucide-react";
 import { createAvaliacao } from "../services/api";
 import { toast } from "sonner";
@@ -9,17 +9,23 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  lojaId?: number; // ✅ Adicionado para suportar Multi-loja
 }
 
-export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Props) {
+export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess, lojaId }: Props) {
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     cliente: "",
     nota: 5,
     texto: "",
-    // We keep the internal state in Portuguese to match the backend expectations
-    sentimento: "positivo" 
+    sentimento: "positivo",
+    loja_id: lojaId // ✅ Vincula a avaliação à loja atual
   });
+
+  // ✅ Sincroniza o lojaId do formulário caso ele mude no Dashboard
+  useEffect(() => {
+    setForm(prev => ({ ...prev, loja_id: lojaId }));
+  }, [lojaId]);
 
   if (!isOpen) return null;
 
@@ -27,11 +33,13 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
     e.preventDefault();
     setLoading(true);
     try {
+      // ✅ Envia os dados incluindo o loja_id para o backend
       await createAvaliacao(form);
       toast.success("Review inserted into the database!");
       onSuccess();
       onClose();
-      setForm({ cliente: "", nota: 5, texto: "", sentimento: "positivo" });
+      // ✅ Mantém o loja_id ao resetar o formulário
+      setForm({ cliente: "", nota: 5, texto: "", sentimento: "positivo", loja_id: lojaId });
     } catch (err: unknown) {
       if (err instanceof Error) {
         toast.error(err.message || "Server validation error.");
@@ -43,7 +51,6 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
     }
   }
 
-  // Determine feeling based on stars
   const handleStarClick = (selectedStar: number) => {
     let newSentimento = "neutro";
     if (selectedStar >= 4) newSentimento = "positivo";
@@ -52,7 +59,6 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
     setForm({ ...form, nota: selectedStar, sentimento: newSentimento });
   };
 
-  // Helper function to translate feeling to UI
   const getFeelingLabel = (sentimento: string) => {
     if (sentimento === 'positivo') return 'Positive';
     if (sentimento === 'negativo') return 'Negative';
@@ -64,14 +70,13 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
       
       <div className="bg-white dark:bg-[#111113] w-full max-w-lg rounded-[48px] border border-slate-200 dark:border-white/10 shadow-[0_32px_128px_-12px_rgba(0,0,0,0.5)] overflow-hidden relative animate-in zoom-in-95 slide-in-from-bottom-10 duration-500">
         
-        {/* Professional Header */}
         <div className="p-8 pb-6 flex justify-between items-start border-b dark:border-white/5">
           <div className="flex items-center gap-4">
             <div className="bg-[#EA1D2C]/10 p-3.5 rounded-3xl text-[#EA1D2C]">
               <MessageSquarePlus size={24} strokeWidth={2.5} />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">
+              <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none italic">
                 Submit Review
               </h2>
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-1.5">
@@ -86,7 +91,6 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
 
         <form onSubmit={handleSubmit} className="p-8 space-y-6">
           
-          {/* Name Input */}
           <div className="space-y-2.5">
             <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest ml-1">
               Customer Identification
@@ -100,13 +104,11 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
             />
           </div>
 
-          {/* Star System */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between ml-1">
               <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest">
                 Satisfaction Level
               </label>
-              {/* Dynamic Feeling Indicator */}
               <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${
                 form.sentimento === 'positivo' ? 'bg-emerald-500/10 text-emerald-500' :
                 form.sentimento === 'negativo' ? 'bg-red-500/10 text-red-500' :
@@ -134,7 +136,6 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
             </div>
           </div>
 
-          {/* Comment Textarea */}
           <div className="space-y-2.5">
             <label className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest ml-1">
               Customer Feedback
@@ -149,7 +150,6 @@ export default function SimularAvaliacaoModal({ isOpen, onClose, onSuccess }: Pr
             />
           </div>
 
-          {/* Action Button */}
           <div className="pt-2">
             <button
               disabled={loading}
