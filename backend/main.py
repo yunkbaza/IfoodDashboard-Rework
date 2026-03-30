@@ -14,7 +14,7 @@ from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import func, cast, Date, desc
+from sqlalchemy import func, cast, Date, desc, extract 
 from pydantic import BaseModel
 import uvicorn
 from uvicorn.config import LOGGING_CONFIG
@@ -22,12 +22,12 @@ from dotenv import load_dotenv
 
 # Importações do projeto
 from app.core.database import get_db, engine
-from app.models.pedido import Pedido, ItemPedido, Usuario, Avaliacao, Base, Loja # Loja adicionada
+from app.models.pedido import Pedido, ItemPedido, Usuario, Avaliacao, Base, Loja
 from app.schemas.pedido import PedidoSchema
 from app.core.auth import verificar_senha, obter_hash_senha, criar_token_acesso
 
 # Inicialização
-load_dotenv()
+load_dotenv(override=True)
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Ifood Dashboard API", version="3.5.0")
@@ -82,7 +82,7 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 # ==========================================
-# 📊 SCHEMAS DE DADOS (Mantendo os seus + Adições)
+# 📊 SCHEMAS DE DADOS
 # ==========================================
 class StatusUpdate(BaseModel):
     status: str
@@ -103,7 +103,7 @@ class MetaAnualResponse(BaseModel):
     percentual: float
 
 # ==========================================
-# 🔍 FILTROS AUXILIARES (ATUALIZADO PARA MULTI-LOJA)
+# 🔍 FILTROS AUXILIARES (MULTI-LOJA)
 # ==========================================
 def apply_filters(query, model, periodo: str, loja_id: Optional[int] = None):
     hoje = datetime.now().date()
@@ -117,7 +117,7 @@ def apply_filters(query, model, periodo: str, loja_id: Optional[int] = None):
     else: 
         query = query.filter(coluna_data >= (hoje - timedelta(days=7)))
     
-    # Filtro de Loja (Requisito 3.3 do Guia)
+    # Filtro de Loja
     if loja_id:
         query = query.filter(model.loja_id == loja_id)
         
@@ -150,7 +150,7 @@ def registrar_usuario(usuario_data: dict, db: Session = Depends(get_db)):
     return {"message": "Utilizador criado com sucesso!"}
 
 # ==========================================
-# 📦 OPERAÇÃO E DASHBOARD (AJUSTADO MULTI-LOJA)
+# 📦 OPERAÇÃO E DASHBOARD
 # ==========================================
 
 @app.get("/api/lojas")
@@ -163,7 +163,6 @@ async def simular_pedido_random(loja_id: Optional[int] = None, db: Session = Dep
     bairros = ["Centro", "Jardins", "Pinheiros", "Itaim Bibi", "Vila Mariana", "Santana", "Bela Vista"]
     pagamentos = ["PIX", "CARTÃO DE CRÉDITO", "CARTÃO DE DÉBITO", "DINHEIRO"]
     
-    # Se não houver lojas cadastradas, cria uma padrão para teste
     loja = db.query(Loja).first()
     if not loja:
         loja = Loja(nome="Loja Matriz", cnpj="00.000.000/0001-00", cidade="São Paulo")
@@ -203,7 +202,9 @@ def listar_pedidos(loja_id: Optional[int] = None, periodo: str = Query("7dias"),
     query = apply_filters(db.query(Pedido), Pedido, periodo, loja_id)
     return query.order_by(desc(Pedido.data_hora)).all()
 
-# --- Rotas de Analytics (Ajustadas para o Escopo iFood) ---
+# ==========================================
+# 📈 ROTAS DE ANALYTICS (GRÁFICOS E KPIs)
+# ==========================================
 
 @app.get("/api/dashboard/stats")
 def get_dashboard_stats(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
@@ -230,6 +231,85 @@ def get_saude_financeira(loja_id: Optional[int] = None, periodo: str = Query("7d
         "margem_percentual": f"{round((lucro/faturamento*100), 1) if faturamento > 0 else 0}%"
     }
 
+@app.get("/api/dashboard/vendas-diarias")
+def get_vendas_diarias(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = apply_filters(db.query(cast(Pedido.data_hora, Date).label("data"), func.sum(Pedido.valor_total).label("total")).filter(Pedido.status == "CONCLUIDO"), Pedido, periodo, loja_id)
+    vendas = query.group_by("data").order_by("data").all()
+    return [{"data": v.data.strftime("%d/%m"), "valor": float(v.total)} for v in vendas]
+
+@app.get("/api/dashboard/top-produtos")
+def get_top_produtos(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = db.query(
+        ItemPedido.nome_produto.label("nome"),
+        func.sum(ItemPedido.quantidade).label("quantidade")
+    ).join(Pedido, Pedido.id_pedido == ItemPedido.id_pedido)
+    
+    query = apply_filters(query, Pedido, periodo, loja_id)
+    query = query.filter(Pedido.status == "CONCLUIDO")
+    
+    resultados = query.group_by(ItemPedido.nome_produto).order_by(desc("quantidade")).limit(5).all()
+    return [{"nome": r.nome, "quantidade": int(r.quantidade)} for r in resultados]
+
+@app.get("/api/dashboard/bairros")
+def get_stats_bairros(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = db.query(
+        Pedido.bairro_destino.label("bairro"),
+        func.count(Pedido.id_pedido).label("quantidade")
+    )
+    query = apply_filters(query, Pedido, periodo, loja_id)
+    query = query.filter(Pedido.status == "CONCLUIDO")
+    
+    resultados = query.group_by(Pedido.bairro_destino).order_by(desc("quantidade")).limit(6).all()
+    return [{"nome": r.bairro, "valor": int(r.quantidade)} for r in resultados]
+
+@app.get("/api/dashboard/horarios")
+def get_stats_horarios(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = db.query(
+        extract('hour', Pedido.data_hora).label("hora"),
+        func.count(Pedido.id_pedido).label("quantidade")
+    )
+    query = apply_filters(query, Pedido, periodo, loja_id)
+    
+    resultados = query.group_by("hora").order_by("hora").all()
+    return [{"hora": f"{int(r.hora)}h", "pedidos": int(r.quantidade)} for r in resultados]
+
+@app.get("/api/dashboard/pagamentos")
+def get_stats_pagamentos(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = db.query(
+        Pedido.forma_pagamento.label("pagamento"),
+        func.count(Pedido.id_pedido).label("quantidade")
+    )
+    query = apply_filters(query, Pedido, periodo, loja_id)
+    query = query.filter(Pedido.status == "CONCLUIDO")
+    
+    resultados = query.group_by(Pedido.forma_pagamento).order_by(desc("quantidade")).all()
+    return [{"nome": r.pagamento, "valor": int(r.quantidade)} for r in resultados]
+
+@app.get("/api/dashboard/meta-anual", response_model=MetaAnualResponse)
+def get_meta_anual(loja_id: Optional[int] = None, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    ano_atual = datetime.now().year
+    query = db.query(func.sum(Pedido.valor_total)).filter(
+        Pedido.status == "CONCLUIDO",
+        extract('year', Pedido.data_hora) == ano_atual
+    )
+    
+    if loja_id:
+        query = query.filter(Pedido.loja_id == loja_id)
+        
+    faturamento = query.scalar() or 0.0
+    
+    meta = 150000.0 if loja_id else 500000.0
+    percentual = min(round((faturamento / meta) * 100, 1), 100.0) if meta > 0 else 0
+    
+    return {
+        "valor_meta": meta,
+        "valor_atual": round(faturamento, 2),
+        "percentual": percentual
+    }
+
+# ==========================================
+# 📄 EXPORTAÇÃO E AUDITORIA
+# ==========================================
 @app.get("/api/dashboard/exportar")
 def exportar_dados(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     query = apply_filters(db.query(Pedido), Pedido, periodo, loja_id)
@@ -249,8 +329,9 @@ def exportar_dados(loja_id: Optional[int] = None, periodo: str = Query("7dias"),
         headers={"Content-Disposition": f"attachment; filename=relatorio_ifood_{periodo}.csv"}
     )
 
-# --- IA & Avaliações (Sua Lógica Original com Blindagem Regex) ---
-
+# ==========================================
+# 🧠 IA E AVALIAÇÕES (GEMINI)
+# ==========================================
 @app.get("/api/avaliacoes")
 def listar_avaliacoes(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     query = apply_filters(db.query(Avaliacao), Avaliacao, periodo, loja_id)
@@ -270,36 +351,41 @@ def analisar_feedbacks_ia(request: FeedbackRequest, token: str = Depends(oauth2_
     if not API_KEY:
         return [{"tipo": "AlertTriangle", "titulo": "Erro de Chave", "reclamacao": "API Key ausente.", "dica": "Configure o .env"}]
 
+    print(f"\n---> CHAVE LIDA: {str(API_KEY)[:10]}...{str(API_KEY)[-5:]} <---\n")
+
     try:
-        prompt = f"Como Analista de Qualidade Sênior, avalie ESTES feedbacks: '{request.feedbacks}'. Retorne APENAS um array JSON válido."
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+        # ✅ PROMPT BLINDADO: Força chaves exatas para evitar renderização vazia
+        prompt = f"""
+        Como Analista de Qualidade Sênior, avalie os seguintes feedbacks de clientes: {request.feedbacks}. 
+        Retorne APENAS um array JSON válido. É ABSOLUTAMENTE OBRIGATÓRIO que cada objeto do array tenha EXATAMENTE estas 4 chaves:
+        - "tipo": use "TrendingDown" para quedas ou "AlertTriangle" para alertas.
+        - "titulo": um título muito curto do problema.
+        - "reclamacao": o contexto ou resumo do problema relatado.
+        - "dica": a sua recomendação prática e direta de ação.
+        NÃO retorne texto fora do JSON.
+        """
+        
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
         
         payload = {
             "contents": [{"parts": [{"text": prompt}]}], 
             "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2}
         }
         
-        resposta = requests.post(url, json=payload, timeout=15)
+        resposta = requests.post(url, json=payload, timeout=45)
         if resposta.status_code != 200:
+            print(f"ERRO GOOGLE API: {resposta.status_code} - {resposta.text}") 
             return [{"tipo": "AlertTriangle", "titulo": "Erro API", "reclamacao": "Google API Offline", "dica": "Tente mais tarde"}]
 
         texto_ia = resposta.json()['candidates'][0]['content']['parts'][0]['text']
         
-        # ✅ SUA BLINDAGEM POR REGEX MANTIDA
         match = re.search(r'\[.*\]', texto_ia, re.DOTALL)
         if match:
             return json.loads(match.group(0))
-        return [{"tipo": "AlertTriangle", "titulo": "Erro IA", "reclamacao": "Formato inválido", "dica": "Repita a operação"}]
+        return [{"tipo": "AlertTriangle", "titulo": "Erro IA", "reclamacao": "Formato inválido.", "dica": "Repita a operação"}]
         
     except Exception as e:
         return [{"tipo": "AlertTriangle", "titulo": "Serviço Indisponível", "reclamacao": str(e), "dica": "Verifique o Backend"}]
-
-# --- Rotas Adicionais de Gráficos (Ajustadas) ---
-@app.get("/api/dashboard/vendas-diarias")
-def get_vendas_diarias(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    query = apply_filters(db.query(cast(Pedido.data_hora, Date).label("data"), func.sum(Pedido.valor_total).label("total")).filter(Pedido.status == "CONCLUIDO"), Pedido, periodo, loja_id)
-    vendas = query.group_by("data").order_by("data").all()
-    return [{"data": v.data.strftime("%d/%m"), "valor": float(v.total)} for v in vendas]
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

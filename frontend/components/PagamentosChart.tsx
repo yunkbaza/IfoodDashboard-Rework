@@ -10,10 +10,12 @@ import {
   Legend 
 } from 'recharts';
 import { CreditCard, ShieldCheck } from "lucide-react";
-import { useLanguage } from "../contexts/LanguageContext";
+import { useLanguage } from "../contexts/LanguageContext"; // ✅
 
-interface PagamentoData { 
-  tipo: string; 
+// ✅ INTERFACE FLEXÍVEL: Aceita o padrão da API nova ('nome') e antiga ('tipo')
+export interface PagamentoData { 
+  nome?: string;
+  tipo?: string; 
   valor: number; 
 }
 
@@ -28,35 +30,41 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
     '#94A3B8', // Slate
   ];
 
-  // 1. Função de Tradução com Normalização Estrita
-  const getTranslatedLabel = useCallback((tipo: string) => {
+  // 1. Função de Tradução com Normalização Estrita e Proteção contra Undefined
+  const getTranslatedLabel = useCallback((chave: string | undefined) => {
+    // 🛡️ Previne o erro "Cannot read properties of undefined (reading 'trim')"
+    if (!chave) return "Outros";
+
     // Normaliza o texto: remove espaços e coloca em minúsculas para comparação
-    const normalizado = tipo.trim().toLowerCase();
+    const normalizado = chave.trim().toLowerCase();
     
+    // Mapeamento seguro com fallback
     const map: Record<string, string> = {
-      'cartão de crédito': t.charts.pagamentos.methods.credit,
-      'cartao de credito': t.charts.pagamentos.methods.credit,
-      'cartão de débito': t.charts.pagamentos.methods.debit,
-      'cartao de debito': t.charts.pagamentos.methods.debit,
-      'dinheiro': t.charts.pagamentos.methods.cash,
-      'cash': t.charts.pagamentos.methods.cash,
-      'pix': t.charts.pagamentos.methods.pix
+      'cartão de crédito': t.charts?.pagamentos?.methods?.credit || 'Crédito',
+      'cartao de credito': t.charts?.pagamentos?.methods?.credit || 'Crédito',
+      'cartão de débito': t.charts?.pagamentos?.methods?.debit || 'Débito',
+      'cartao de debito': t.charts?.pagamentos?.methods?.debit || 'Débito',
+      'dinheiro': t.charts?.pagamentos?.methods?.cash || 'Dinheiro',
+      'cash': t.charts?.pagamentos?.methods?.cash || 'Dinheiro',
+      'pix': t.charts?.pagamentos?.methods?.pix || 'PIX'
     };
 
-    return map[normalizado] || tipo;
+    return map[normalizado] || chave;
   }, [t]);
 
   // 2. AGRUPAMENTO ROBUSTO: Garante que "Dinheiro", "dinheiro " e "cash" sejam a mesma fatia
   const processedData = useMemo(() => {
-    if (!data) return [];
+    if (!data || !Array.isArray(data)) return [];
 
-    const grouped = data.reduce((acc: Record<string, PagamentoData>, item) => {
-      const translatedLabel = getTranslatedLabel(item.tipo);
+    const grouped = data.reduce((acc: Record<string, { tipo: string; valor: number }>, item) => {
+      // ✅ Busca a chave correta baseada no que a API retornar
+      const rawLabel = item.nome || item.tipo;
+      const translatedLabel = getTranslatedLabel(rawLabel);
       
       if (!acc[translatedLabel]) {
         acc[translatedLabel] = { tipo: translatedLabel, valor: 0 };
       }
-      acc[translatedLabel].valor += item.valor;
+      acc[translatedLabel].valor += (item.valor || 0);
       return acc;
     }, {});
 
@@ -65,18 +73,29 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
 
   const total = processedData.reduce((acc, entry) => acc + entry.valor, 0);
 
+  if (!data || data.length === 0) {
+    return (
+      <div className="flex flex-col h-full w-full items-center justify-center bg-slate-50 dark:bg-white/5 rounded-3xl border border-dashed dark:border-white/10 p-8">
+        <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+          {t.charts?.pagamentos?.title || 'Formas de Pagamento'}
+        </h3>
+        <p className="text-xs font-bold text-slate-500">Sem dados disponíveis</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col min-h-0 w-full group">
       <div className="mb-4 shrink-0">
         <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] mb-1">
-          {t.charts.pagamentos.subtitle}
+          {t.charts?.pagamentos?.subtitle || 'MÉTODOS'}
         </h3>
         <div className="flex items-center gap-2">
           <div className="p-2 rounded-lg bg-[#EA1D2C]/10 text-[#EA1D2C]">
             <CreditCard size={20} />
           </div>
           <p className="text-xl lg:text-2xl font-black text-slate-900 dark:text-white tracking-tighter uppercase leading-none">
-            {t.charts.pagamentos.title}
+            {t.charts?.pagamentos?.title || 'FORMAS DE PAGAMENTO'}
           </p>
         </div>
       </div>
@@ -84,7 +103,7 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
       <div className="flex-1 w-full min-h-0 relative">
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none -translate-y-[10%]">
           <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
-            {t.charts.pagamentos.total}
+            {t.charts?.pagamentos?.total || 'TOTAL'}
           </span>
           <span className="text-xl lg:text-2xl font-black dark:text-white tabular-nums">
             {formatCurrency(total)}
@@ -116,6 +135,7 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
             </Pie>
             
             <Tooltip 
+              cursor={{ fill: 'transparent' }}
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {
                   const item = payload[0].payload;
@@ -123,7 +143,7 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
                   return (
                     <div className="bg-white/95 dark:bg-[#111113]/95 backdrop-blur-xl p-4 rounded-3xl shadow-2xl border border-slate-100 dark:border-white/10 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-200">
                       <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                        {t.charts.pagamentos.tooltip}
+                        {t.charts?.pagamentos?.tooltip || 'MÉTODO DE PAGAMENTO'}
                       </p>
                       <div className="flex items-center gap-2 mb-1">
                         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: payload[0].payload.fill }} />
@@ -135,7 +155,7 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
                         {formatCurrency(item.valor)}
                       </p>
                       <p className="text-[9px] font-bold text-emerald-500 uppercase mt-1 italic">
-                        {percent}% {t.charts.pagamentos.share}
+                        {percent}% {t.charts?.pagamentos?.share || 'DO FATURAMENTO'}
                       </p>
                     </div>
                   );
@@ -163,7 +183,7 @@ export default function PagamentosChart({ data }: { data: PagamentoData[] }) {
         <div className="px-4 py-2 bg-slate-50 dark:bg-[#1C1C1E] rounded-2xl border dark:border-white/5 flex items-center gap-2">
           <ShieldCheck size={14} className="text-emerald-500" />
           <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
-            {t.charts.pagamentos.footer}
+            {t.charts?.pagamentos?.footer || 'TRANSAÇÕES SEGURAS'}
           </p>
         </div>
       </div>

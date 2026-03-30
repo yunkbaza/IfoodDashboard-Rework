@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { 
   ResponsiveContainer, 
   BarChart, 
@@ -11,15 +12,18 @@ import {
   CartesianGrid 
 } from 'recharts';
 import { MapPin } from "lucide-react";
-import { useLanguage } from "../contexts/LanguageContext"; // ✅
+import { useLanguage } from "../contexts/LanguageContext";
 
-interface BairroData {
-  bairro: string;
-  pedidos: number;
+// ✅ INTERFACE FLEXÍVEL: Aceita tanto o padrão antigo quanto o da nova API
+export interface BairroData {
+  nome?: string;
+  bairro?: string;
+  valor?: number;
+  pedidos?: number;
 }
 
 export default function BairrosChart({ data }: { data: BairroData[] }) {
-  const { lang, t } = useLanguage(); // ✅
+  const { lang, t } = useLanguage();
 
   // ✅ PALETA IFOOD LOGISTICS: Tons de vermelho para mapeamento de calor
   const IFOOD_RED_SHADES = [
@@ -29,6 +33,26 @@ export default function BairrosChart({ data }: { data: BairroData[] }) {
     '#E0525D', // Suave
     '#FF8C96', // Pastel
   ];
+
+  // ✅ NORMALIZAÇÃO DE DADOS: Pega o formato novo e adapta para o gráfico
+  const processedData = useMemo(() => {
+    if (!data) return [];
+    return data.map(d => ({
+      bairro: d.nome || d.bairro || "Desconhecido",
+      pedidos: d.valor || d.pedidos || 0
+    }));
+  }, [data]);
+
+  if (!processedData || processedData.length === 0) {
+    return (
+      <div className="flex flex-col h-full w-full items-center justify-center bg-slate-50 dark:bg-white/5 rounded-3xl border border-dashed dark:border-white/10 p-8">
+        <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+          {t.charts?.bairros?.title || 'Pedidos por Bairro'}
+        </h3>
+        <p className="text-xs font-bold text-slate-500">Sem dados disponíveis</p>
+      </div>
+    );
+  }
 
   return (
     // ✅ ESTRUTURA ELÁSTICA: Garante que ocupe perfeitamente o grid do dashboard
@@ -53,7 +77,7 @@ export default function BairrosChart({ data }: { data: BairroData[] }) {
       <div className="flex-1 min-h-0 w-full relative">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart 
-            data={data} 
+            data={processedData} 
             layout="vertical" 
             margin={{ top: 0, right: 20, left: 10, bottom: 0 }}
           >
@@ -136,7 +160,7 @@ export default function BairrosChart({ data }: { data: BairroData[] }) {
               animationDuration={1800}
               animationEasing="ease-in-out"
             >
-              {data.map((_, index) => (
+              {processedData.map((_, index) => (
                 <Cell 
                   key={`cell-${index}`} 
                   fill={IFOOD_RED_SHADES[index % IFOOD_RED_SHADES.length]} 
