@@ -1,5 +1,6 @@
 # 🚀 Dashboard iFood Analytics
 
+<img width="1904" height="952" alt="image" src="https://github.com/user-attachments/assets/2bd69506-9b50-4e55-975d-e04419a77ebb" />
 
 
 **Dashboard Pro** é uma plataforma SaaS full-stack de alta performance desenvolvida para proporcionar controle total e insights inteligentes sobre operações de delivery (focada no ecossistema iFood). O sistema utiliza Inteligência Artificial generativa para transformar feedbacks brutos de clientes em decisões estratégicas de negócio.
@@ -60,6 +61,9 @@ Acesse:
 
   * Frontend: `http://localhost:3000`
   * Backend (Docs): `http://localhost:8000/docs`
+
+  * Login: allan@dashboard.com
+  * Senha: admin123
 
 -----
 
