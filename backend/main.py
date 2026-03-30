@@ -1,40 +1,43 @@
 import os
 import json
-import requests
-import random
-import re
 import csv
 import io
+import random
+import re
+import requests
 from datetime import datetime, timedelta
-from typing import List, Optional
+from typing import List, Optional, Generator
 
 # FastAPI, WebSockets e Segurança
 from fastapi import FastAPI, Depends, Query, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from sqlalchemy import func, cast, Date, desc, extract 
 from pydantic import BaseModel
 import uvicorn
-from uvicorn.config import LOGGING_CONFIG
 from dotenv import load_dotenv
+
+# SQLAlchemy
+from sqlalchemy.orm import Session
+from sqlalchemy import func, cast, Date, desc, extract 
 
 # Importações do projeto
 from app.core.database import get_db, engine
 from app.models.pedido import Pedido, ItemPedido, Usuario, Avaliacao, Base, Loja
-from app.schemas.pedido import PedidoSchema
 from app.core.auth import verificar_senha, obter_hash_senha, criar_token_acesso
 
-# Inicialização
+# ==========================================
+# 🚀 INICIALIZAÇÃO E CONFIGURAÇÃO
+# ==========================================
 load_dotenv(override=True)
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Ifood Dashboard API", version="3.5.0")
+app = FastAPI(
+    title="iFood Dashboard API - Enterprise Edition", 
+    version="4.0.0",
+    description="Backend otimizado com Streaming de Dados e Auditoria IA."
+)
 
-# ==========================================
-# 🛡️ CONFIGURAÇÃO DE CORS
-# ==========================================
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -43,9 +46,6 @@ app.add_middleware(
     allow_headers=["*"], 
 )
 
-# ==========================================
-# 🔐 O CADEADO (OAuth2)
-# ==========================================
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 # ==========================================
@@ -64,11 +64,11 @@ class ConnectionManager:
             self.active_connections.remove(websocket)
 
     async def broadcast(self, message: dict):
-        for connection in self.active_connections:
+        for connection in list(self.active_connections):
             try:
                 await connection.send_json(message)
             except Exception:
-                pass 
+                self.disconnect(connection)
 
 manager = ConnectionManager()
 
@@ -82,7 +82,7 @@ async def websocket_endpoint(websocket: WebSocket):
         manager.disconnect(websocket)
 
 # ==========================================
-# 📊 SCHEMAS DE DADOS
+# 📊 SCHEMAS DE DADOS (PYDANTIC)
 # ==========================================
 class StatusUpdate(BaseModel):
     status: str
@@ -103,13 +103,12 @@ class MetaAnualResponse(BaseModel):
     percentual: float
 
 # ==========================================
-# 🔍 FILTROS AUXILIARES (MULTI-LOJA)
+# 🔍 MOTOR DE FILTROS DINÂMICOS
 # ==========================================
 def apply_filters(query, model, periodo: str, loja_id: Optional[int] = None):
     hoje = datetime.now().date()
     coluna_data = cast(model.data_hora, Date) if hasattr(model, 'data_hora') else cast(model.data, Date)
     
-    # Filtro de Data
     if periodo == 'hoje':
         query = query.filter(coluna_data == hoje)
     elif periodo == 'mensal':
@@ -117,14 +116,13 @@ def apply_filters(query, model, periodo: str, loja_id: Optional[int] = None):
     else: 
         query = query.filter(coluna_data >= (hoje - timedelta(days=7)))
     
-    # Filtro de Loja
     if loja_id:
         query = query.filter(model.loja_id == loja_id)
         
     return query
 
 # ==========================================
-# 🔑 AUTENTICAÇÃO
+# 🔑 MÓDULO DE AUTENTICAÇÃO
 # ==========================================
 @app.post("/api/auth/login")
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
@@ -150,19 +148,14 @@ def registrar_usuario(usuario_data: dict, db: Session = Depends(get_db)):
     return {"message": "Utilizador criado com sucesso!"}
 
 # ==========================================
-# 📦 OPERAÇÃO E DASHBOARD
+# 📦 OPERAÇÃO E GESTÃO DE LOJAS
 # ==========================================
-
 @app.get("/api/lojas")
 def listar_lojas(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     return db.query(Loja).all()
 
 @app.post("/api/pedidos/simular")
 async def simular_pedido_random(loja_id: Optional[int] = None, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    id_simulado = f"IFD-{random.randint(10000, 99999)}"
-    bairros = ["Centro", "Jardins", "Pinheiros", "Itaim Bibi", "Vila Mariana", "Santana", "Bela Vista"]
-    pagamentos = ["PIX", "CARTÃO DE CRÉDITO", "CARTÃO DE DÉBITO", "DINHEIRO"]
-    
     loja = db.query(Loja).first()
     if not loja:
         loja = Loja(nome="Loja Matriz", cnpj="00.000.000/0001-00", cidade="São Paulo")
@@ -170,14 +163,15 @@ async def simular_pedido_random(loja_id: Optional[int] = None, db: Session = Dep
         db.commit()
         db.refresh(loja)
 
+    id_simulado = f"IFD-{random.randint(10000, 99999)}"
     novo_pedido = Pedido(
         id_pedido=id_simulado,
         loja_id=loja_id or loja.id,
         status="PENDENTE",
         valor_total=random.uniform(35.0, 180.0),
         taxa_entrega=random.uniform(5.0, 15.0),
-        forma_pagamento=random.choice(pagamentos),
-        bairro_destino=random.choice(bairros),
+        forma_pagamento=random.choice(["PIX", "CARTÃO DE CRÉDITO", "CARTÃO DE DÉBITO", "DINHEIRO"]),
+        bairro_destino=random.choice(["Centro", "Jardins", "Pinheiros", "Itaim Bibi", "Vila Mariana", "Santana"]),
         data_hora=datetime.now()
     )
     db.add(novo_pedido)
@@ -203,9 +197,8 @@ def listar_pedidos(loja_id: Optional[int] = None, periodo: str = Query("7dias"),
     return query.order_by(desc(Pedido.data_hora)).all()
 
 # ==========================================
-# 📈 ROTAS DE ANALYTICS (GRÁFICOS E KPIs)
+# 📈 MÓDULO DE ANALYTICS (KPIs)
 # ==========================================
-
 @app.get("/api/dashboard/stats")
 def get_dashboard_stats(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     query = apply_filters(db.query(Pedido), Pedido, periodo, loja_id)
@@ -239,103 +232,71 @@ def get_vendas_diarias(loja_id: Optional[int] = None, periodo: str = Query("7dia
 
 @app.get("/api/dashboard/top-produtos")
 def get_top_produtos(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    query = db.query(
-        ItemPedido.nome_produto.label("nome"),
-        func.sum(ItemPedido.quantidade).label("quantidade")
-    ).join(Pedido, Pedido.id_pedido == ItemPedido.id_pedido)
-    
-    query = apply_filters(query, Pedido, periodo, loja_id)
-    query = query.filter(Pedido.status == "CONCLUIDO")
-    
+    query = db.query(ItemPedido.nome_produto.label("nome"), func.sum(ItemPedido.quantidade).label("quantidade")).join(Pedido, Pedido.id_pedido == ItemPedido.id_pedido)
+    query = apply_filters(query, Pedido, periodo, loja_id).filter(Pedido.status == "CONCLUIDO")
     resultados = query.group_by(ItemPedido.nome_produto).order_by(desc("quantidade")).limit(5).all()
     return [{"nome": r.nome, "quantidade": int(r.quantidade)} for r in resultados]
 
 @app.get("/api/dashboard/bairros")
 def get_stats_bairros(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    query = db.query(
-        Pedido.bairro_destino.label("bairro"),
-        func.count(Pedido.id_pedido).label("quantidade")
-    )
-    query = apply_filters(query, Pedido, periodo, loja_id)
-    query = query.filter(Pedido.status == "CONCLUIDO")
-    
+    query = db.query(Pedido.bairro_destino.label("bairro"), func.count(Pedido.id_pedido).label("quantidade"))
+    query = apply_filters(query, Pedido, periodo, loja_id).filter(Pedido.status == "CONCLUIDO")
     resultados = query.group_by(Pedido.bairro_destino).order_by(desc("quantidade")).limit(6).all()
     return [{"nome": r.bairro, "valor": int(r.quantidade)} for r in resultados]
 
 @app.get("/api/dashboard/horarios")
 def get_stats_horarios(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    query = db.query(
-        extract('hour', Pedido.data_hora).label("hora"),
-        func.count(Pedido.id_pedido).label("quantidade")
-    )
-    query = apply_filters(query, Pedido, periodo, loja_id)
-    
-    resultados = query.group_by("hora").order_by("hora").all()
+    query = db.query(extract('hour', Pedido.data_hora).label("hora"), func.count(Pedido.id_pedido).label("quantidade"))
+    resultados = apply_filters(query, Pedido, periodo, loja_id).group_by("hora").order_by("hora").all()
     return [{"hora": f"{int(r.hora)}h", "pedidos": int(r.quantidade)} for r in resultados]
 
 @app.get("/api/dashboard/pagamentos")
 def get_stats_pagamentos(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    query = db.query(
-        Pedido.forma_pagamento.label("pagamento"),
-        func.count(Pedido.id_pedido).label("quantidade")
-    )
-    query = apply_filters(query, Pedido, periodo, loja_id)
-    query = query.filter(Pedido.status == "CONCLUIDO")
-    
-    resultados = query.group_by(Pedido.forma_pagamento).order_by(desc("quantidade")).all()
+    query = db.query(Pedido.forma_pagamento.label("pagamento"), func.count(Pedido.id_pedido).label("quantidade"))
+    resultados = apply_filters(query, Pedido, periodo, loja_id).filter(Pedido.status == "CONCLUIDO").group_by(Pedido.forma_pagamento).order_by(desc("quantidade")).all()
     return [{"nome": r.pagamento, "valor": int(r.quantidade)} for r in resultados]
 
 @app.get("/api/dashboard/meta-anual", response_model=MetaAnualResponse)
 def get_meta_anual(loja_id: Optional[int] = None, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    ano_atual = datetime.now().year
-    query = db.query(func.sum(Pedido.valor_total)).filter(
-        Pedido.status == "CONCLUIDO",
-        extract('year', Pedido.data_hora) == ano_atual
-    )
-    
-    if loja_id:
-        query = query.filter(Pedido.loja_id == loja_id)
-        
-    faturamento = query.scalar() or 0.0
-    
+    faturamento = apply_filters(db.query(func.sum(Pedido.valor_total)).filter(Pedido.status == "CONCLUIDO", extract('year', Pedido.data_hora) == datetime.now().year), Pedido, 'mensal', loja_id).scalar() or 0.0
     meta = 150000.0 if loja_id else 500000.0
-    percentual = min(round((faturamento / meta) * 100, 1), 100.0) if meta > 0 else 0
-    
-    return {
-        "valor_meta": meta,
-        "valor_atual": round(faturamento, 2),
-        "percentual": percentual
-    }
+    return {"valor_meta": meta, "valor_atual": round(faturamento, 2), "percentual": min(round((faturamento / meta) * 100, 1), 100.0) if meta > 0 else 0}
 
 # ==========================================
-# 📄 EXPORTAÇÃO E AUDITORIA
+# 📄 MÓDULO DE EXPORTAÇÃO (STREAMING REAL)
 # ==========================================
-@app.get("/api/dashboard/exportar")
-def exportar_dados(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    query = apply_filters(db.query(Pedido), Pedido, periodo, loja_id)
-    pedidos = query.all()
-    
+def gerador_csv_pedidos(pedidos: Generator) -> Generator[str, None, None]:
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["ID_PEDIDO", "DATA", "STATUS", "VALOR", "PAGAMENTO", "BAIRRO"])
-    
+    yield output.getvalue()
+    output.seek(0)
+    output.truncate(0)
+
     for p in pedidos:
         writer.writerow([p.id_pedido, p.data_hora.strftime("%Y-%m-%d %H:%M"), p.status, p.valor_total, p.forma_pagamento, p.bairro_destino])
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+@app.get("/api/dashboard/exportar")
+def exportar_dados(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
+    query = apply_filters(db.query(Pedido), Pedido, periodo, loja_id)
+    # yield_per evita que o servidor carregue milhares de linhas na RAM de uma vez
+    pedidos_generator = query.yield_per(100) 
     
-    output.seek(0)
     return StreamingResponse(
-        iter([output.getvalue()]),
+        gerador_csv_pedidos(pedidos_generator),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=relatorio_ifood_{periodo}.csv"}
     )
 
 # ==========================================
-# 🧠 IA E AVALIAÇÕES (GEMINI)
+# 🧠 MÓDULO DE IA E AVALIAÇÕES (GEMINI)
 # ==========================================
 @app.get("/api/avaliacoes")
 def listar_avaliacoes(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    query = apply_filters(db.query(Avaliacao), Avaliacao, periodo, loja_id)
-    return query.order_by(desc(Avaliacao.data)).all()
+    return apply_filters(db.query(Avaliacao), Avaliacao, periodo, loja_id).order_by(desc(Avaliacao.data)).all()
 
 @app.post("/api/avaliacoes")
 def criar_avaliacao(dados: AvaliacaoCreate, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
@@ -349,43 +310,35 @@ def criar_avaliacao(dados: AvaliacaoCreate, db: Session = Depends(get_db), token
 def analisar_feedbacks_ia(request: FeedbackRequest, token: str = Depends(oauth2_scheme)):
     API_KEY = os.getenv("GEMINI_API_KEY")
     if not API_KEY:
-        return [{"tipo": "AlertTriangle", "titulo": "Erro de Chave", "reclamacao": "API Key ausente.", "dica": "Configure o .env"}]
+        return [{"tipo": "AlertTriangle", "titulo": "Erro", "reclamacao": "API Key ausente.", "dica": "Configure o .env"}]
 
+    # Debug de segurança para validar a leitura da chave nova
     print(f"\n---> CHAVE LIDA: {str(API_KEY)[:10]}...{str(API_KEY)[-5:]} <---\n")
 
     try:
-        # ✅ PROMPT BLINDADO: Força chaves exatas para evitar renderização vazia
         prompt = f"""
-        Como Analista de Qualidade Sênior, avalie os seguintes feedbacks de clientes: {request.feedbacks}. 
-        Retorne APENAS um array JSON válido. É ABSOLUTAMENTE OBRIGATÓRIO que cada objeto do array tenha EXATAMENTE estas 4 chaves:
-        - "tipo": use "TrendingDown" para quedas ou "AlertTriangle" para alertas.
-        - "titulo": um título muito curto do problema.
-        - "reclamacao": o contexto ou resumo do problema relatado.
-        - "dica": a sua recomendação prática e direta de ação.
-        NÃO retorne texto fora do JSON.
+        Como Analista de Qualidade Sênior, avalie os seguintes feedbacks: {request.feedbacks}. 
+        Retorne APENAS um array JSON válido. É OBRIGATÓRIO ter estas 4 chaves em cada objeto:
+        - "tipo": "TrendingDown" ou "AlertTriangle".
+        - "titulo": título curto do problema.
+        - "reclamacao": contexto ou resumo do problema.
+        - "dica": recomendação prática e direta.
+        NÃO retorne markdown ou texto extra.
         """
         
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
-        
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}], 
-            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2}
-        }
+        payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2}}
         
         resposta = requests.post(url, json=payload, timeout=45)
         if resposta.status_code != 200:
-            print(f"ERRO GOOGLE API: {resposta.status_code} - {resposta.text}") 
-            return [{"tipo": "AlertTriangle", "titulo": "Erro API", "reclamacao": "Google API Offline", "dica": "Tente mais tarde"}]
+            return [{"tipo": "AlertTriangle", "titulo": "Erro API", "reclamacao": f"Status {resposta.status_code}", "dica": "Verifique os logs"}]
 
         texto_ia = resposta.json()['candidates'][0]['content']['parts'][0]['text']
-        
         match = re.search(r'\[.*\]', texto_ia, re.DOTALL)
-        if match:
-            return json.loads(match.group(0))
-        return [{"tipo": "AlertTriangle", "titulo": "Erro IA", "reclamacao": "Formato inválido.", "dica": "Repita a operação"}]
+        return json.loads(match.group(0)) if match else [{"tipo": "AlertTriangle", "titulo": "Erro IA", "reclamacao": "Formato inválido.", "dica": "Repita."}]
         
     except Exception as e:
-        return [{"tipo": "AlertTriangle", "titulo": "Serviço Indisponível", "reclamacao": str(e), "dica": "Verifique o Backend"}]
+        return [{"tipo": "AlertTriangle", "titulo": "Erro", "reclamacao": str(e), "dica": "Verifique o servidor"}]
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

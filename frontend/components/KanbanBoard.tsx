@@ -19,7 +19,9 @@ import { Clock, ChefHat, CheckCircle2, Loader2, RefreshCcw, MapPin, CreditCard }
 import { toast } from "sonner";
 import { useLanguage } from "../contexts/LanguageContext";
 
-// TYPING
+// ==========================================
+// 🛡️ TIPAGENS ESTRITAS
+// ==========================================
 export interface Pedido {
   id_pedido: string;
   status: string;
@@ -30,8 +32,13 @@ export interface Pedido {
   data_hora: string;
 }
 
+interface KanbanBoardProps {
+  periodo: string;
+  lojaId?: number;
+}
+
 // ==========================================
-// 🃏 COMPONENT: ORDER CARD (DRAGGABLE)
+// 🃏 COMPONENTE: CARTÃO DO PEDIDO (DRAGGABLE)
 // ==========================================
 function KanbanCard({ pedido }: { pedido: Pedido }) {
   const { t, formatCurrency } = useLanguage();
@@ -48,15 +55,17 @@ function KanbanCard({ pedido }: { pedido: Pedido }) {
     opacity: isDragging ? 0.4 : 1,
   };
 
-  const translatedPayment = (method: string) => {
+  // ✅ Otimizado: Fallback seguro caso as traduções não estejam carregadas
+  const translatedPayment = useCallback((method: string) => {
+    if (!method) return "Outros";
     const map: Record<string, string> = {
-      'CARTÃO DE CRÉDITO': t.charts.pagamentos.methods.credit,
-      'CARTÃO DE DÉBITO': t.charts.pagamentos.methods.debit,
-      'DINHEIRO': t.charts.pagamentos.methods.cash,
-      'PIX': t.charts.pagamentos.methods.pix
+      'CARTÃO DE CRÉDITO': t.charts?.pagamentos?.methods?.credit || 'Crédito',
+      'CARTÃO DE DÉBITO': t.charts?.pagamentos?.methods?.debit || 'Débito',
+      'DINHEIRO': t.charts?.pagamentos?.methods?.cash || 'Dinheiro',
+      'PIX': t.charts?.pagamentos?.methods?.pix || 'PIX'
     };
     return map[method.toUpperCase()] || method;
-  };
+  }, [t]);
 
   return (
     <div 
@@ -66,15 +75,20 @@ function KanbanCard({ pedido }: { pedido: Pedido }) {
       {...listeners} 
       className="bg-white dark:bg-[#111113] p-5 rounded-3xl shadow-sm border border-slate-200 dark:border-white/5 cursor-grab active:cursor-grabbing hover:border-[#EA1D2C]/40 hover:shadow-md transition-all group relative overflow-hidden mb-4"
     >
+      {/* Barra lateral de cor baseada no status */}
       <div className={`absolute left-0 top-0 bottom-0 w-1 ${pedido.status === 'PENDENTE' ? 'bg-[#EA1D2C]' : pedido.status === 'PREPARANDO' ? 'bg-amber-500' : 'bg-emerald-500'}`} />
       
       <div className="flex justify-between items-start mb-3">
         <div>
-          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">{t.kanban.orderId}</span>
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">
+            {t.kanban?.orderId || 'ID DO PEDIDO'}
+          </span>
           <span className="text-sm font-black text-slate-900 dark:text-white">{pedido.id_pedido}</span>
         </div>
         <div className="text-right">
-          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">{t.kanban.totalValue}</span>
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-0.5">
+            {t.kanban?.totalValue || 'VALOR TOTAL'}
+          </span>
           <span className="text-sm font-black text-emerald-500 bg-emerald-500/10 px-2.5 py-1 rounded-lg tabular-nums">
             {formatCurrency(pedido.valor_total)}
           </span>
@@ -88,7 +102,9 @@ function KanbanCard({ pedido }: { pedido: Pedido }) {
         </div>
         <div className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
           <CreditCard size={14} className="text-slate-400" />
-          <span className="text-[10px] font-bold uppercase tracking-wider">{translatedPayment(pedido.forma_pagamento)}</span>
+          <span className="text-[10px] font-bold uppercase tracking-wider">
+            {translatedPayment(pedido.forma_pagamento)}
+          </span>
         </div>
       </div>
     </div>
@@ -96,7 +112,7 @@ function KanbanCard({ pedido }: { pedido: Pedido }) {
 }
 
 // ==========================================
-// 🏛️ COMPONENT: COLUMN (DROPPABLE)
+// 🏛️ COMPONENTE: COLUNA DO KANBAN (DROPPABLE)
 // ==========================================
 interface ColumnProps {
   id: string;
@@ -126,7 +142,9 @@ function KanbanColumn({ id, title, icon: Icon, theme, pedidos, limitInfo }: Colu
           </div>
           <div>
             <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-tighter text-lg leading-none">{title}</h3>
-            <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">{pedidos.length} {t.kanban.tickets}</span>
+            <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
+              {pedidos.length} {t.kanban?.tickets || 'TICKETS'}
+            </span>
           </div>
         </div>
       </div>
@@ -137,7 +155,9 @@ function KanbanColumn({ id, title, icon: Icon, theme, pedidos, limitInfo }: Colu
           
           {pedidos.length === 0 && (
             <div className="flex-1 flex flex-col items-center justify-center border-2 border-dashed border-slate-200 dark:border-white/10 rounded-3xl opacity-50 min-h-[150px]">
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{t.kanban.dropHere}</span>
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                {t.kanban?.dropHere || 'SOLTE AQUI'}
+              </span>
             </div>
           )}
 
@@ -153,34 +173,37 @@ function KanbanColumn({ id, title, icon: Icon, theme, pedidos, limitInfo }: Colu
 }
 
 // ==========================================
-// 🚀 MAIN COMPONENT: KANBAN BOARD
+// 🚀 COMPONENTE PRINCIPAL: KANBAN BOARD
 // ==========================================
-export default function KanbanBoard({ periodo, lojaId }: { periodo: string; lojaId?: number }) {
+export default function KanbanBoard({ periodo, lojaId }: KanbanBoardProps) {
   const { t } = useLanguage();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [isLive, setIsLive] = useState(false);
   const [activePedido, setActivePedido] = useState<Pedido | null>(null);
 
+  // Sensores de arrasto com tolerância para evitar cliques acidentais
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
 
   const fetchPedidos = useCallback(async () => {
     try {
-      const data = await getPedidos(periodo, lojaId); // ✅ Agora envia o lojaId
+      // ✅ Fetch agora obedece ao filtro de Multi-loja
+      const data = await getPedidos(periodo, lojaId); 
       setPedidos(data);
     } catch (error) {
-      toast.error(t.kanban.toasts.syncError);
+      toast.error(t.kanban?.toasts?.syncError || 'Erro ao sincronizar pedidos');
     } finally {
       setLoading(false);
     }
-  }, [periodo, lojaId, t.kanban.toasts.syncError]); // ✅ Adicionado lojaId como dependência
+  }, [periodo, lojaId, t]);
 
   useEffect(() => {
     fetchPedidos();
   }, [fetchPedidos]);
 
+  // ✅ WebSocket Isolado com reconexão robusta
   useEffect(() => {
     const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000/ws/pedidos"; 
     const socket = new WebSocket(wsUrl);
@@ -195,9 +218,12 @@ export default function KanbanBoard({ periodo, lojaId }: { periodo: string; loja
       }
     };
 
-    return () => socket.close();
+    return () => {
+      socket.close();
+    };
   }, [fetchPedidos]);
 
+  // Eventos de Drag & Drop
   const handleDragStart = (event: DragStartEvent) => {
     const { active } = event;
     const pedido = pedidos.find(p => p.id_pedido === active.id);
@@ -235,15 +261,21 @@ export default function KanbanBoard({ periodo, lojaId }: { periodo: string; loja
       return;
     }
 
-    // OPTIMISTIC UI
+    // ✨ OPTIMISTIC UI: Atualiza a interface instantaneamente antes de esperar o backend
     setPedidos(prev => prev.map(p => p.id_pedido === idPedido ? { ...p, status: statusNovo } : p));
 
     try {
       await atualizarStatusPedido(idPedido, statusNovo);
-      const statusLabel = statusNovo === 'PREPARANDO' ? t.kanban.columns.preparing : statusNovo === 'CONCLUIDO' ? t.kanban.columns.completed : t.kanban.columns.pending;
-      toast.success(`${t.kanban.toasts.moved} ${statusLabel}`);
+      const statusLabel = statusNovo === 'PREPARANDO' 
+        ? (t.kanban?.columns?.preparing || 'Preparando') 
+        : statusNovo === 'CONCLUIDO' 
+          ? (t.kanban?.columns?.completed || 'Concluído') 
+          : (t.kanban?.columns?.pending || 'Pendente');
+          
+      toast.success(`${t.kanban?.toasts?.moved || 'Movido para'} ${statusLabel}`);
     } catch (error) {
-      toast.error(t.kanban.toasts.updateError);
+      // ⏪ ROLLBACK: Se o backend falhar, devolve o cartão para a coluna original
+      toast.error(t.kanban?.toasts?.updateError || 'Erro ao atualizar status');
       setPedidos(prev => prev.map(p => p.id_pedido === idPedido ? { ...p, status: statusAntigo } : p));
     }
   };
@@ -252,20 +284,24 @@ export default function KanbanBoard({ periodo, lojaId }: { periodo: string; loja
     return (
       <div className="h-full flex flex-col items-center justify-center gap-4">
         <Loader2 className="animate-spin text-[#EA1D2C]" size={40} />
-        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">{t.kanban.status.workstation}</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">
+          {t.kanban?.status?.workstation || 'Sincronizando Estação de Trabalho'}
+        </p>
       </div>
     );
   }
 
   return (
     <div className="h-full flex flex-col animate-in fade-in duration-500">
+      
+      {/* Indicador de Status Real-time */}
       <div className="flex items-center gap-3 mb-8 px-5 py-3 bg-slate-50 dark:bg-[#111113] border border-slate-200 dark:border-white/5 rounded-2xl w-fit shadow-sm">
         <span className="relative flex h-3 w-3">
           {isLive && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
           <span className={`relative inline-flex rounded-full h-3 w-3 ${isLive ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
         </span>
         <span className="text-[10px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-400 flex items-center gap-2">
-          {isLive ? t.kanban.status.live : t.kanban.status.offline}
+          {isLive ? (t.kanban?.status?.live || 'OPERAÇÃO AO VIVO') : (t.kanban?.status?.offline || 'SISTEMA OFFLINE')}
           {isLive && <RefreshCcw size={14} className="animate-spin text-slate-400" />}
         </span>
       </div>
@@ -278,20 +314,32 @@ export default function KanbanBoard({ periodo, lojaId }: { periodo: string; loja
       >
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 flex-1">
           <KanbanColumn 
-            id="PENDENTE" title={t.kanban.columns.pending} icon={Clock} theme="danger" 
+            id="PENDENTE" 
+            title={t.kanban?.columns?.pending || 'Pendente'} 
+            icon={Clock} 
+            theme="danger" 
             pedidos={pedidos.filter(p => p.status === "PENDENTE" || !p.status)} 
           />
           <KanbanColumn 
-            id="PREPARANDO" title={t.kanban.columns.preparing} icon={ChefHat} theme="warning" 
+            id="PREPARANDO" 
+            title={t.kanban?.columns?.preparing || 'Preparando'} 
+            icon={ChefHat} 
+            theme="warning" 
             pedidos={pedidos.filter(p => p.status === "PREPARANDO")} 
           />
           <KanbanColumn 
-            id="CONCLUIDO" title={t.kanban.columns.completed} icon={CheckCircle2} theme="success" 
+            id="CONCLUIDO" 
+            title={t.kanban?.columns?.completed || 'Concluído'} 
+            icon={CheckCircle2} 
+            theme="success" 
+            // Mostra apenas os 10 últimos concluídos para não poluir a tela
             pedidos={pedidos.filter(p => p.status === "CONCLUIDO").slice(0, 10)} 
-            limitInfo={t.kanban.limit}
+            limitInfo={t.kanban?.limit || 'Mostrando os últimos 10 pedidos'}
           />
         </div>
-        <DragOverlay>{activePedido ? <KanbanCard pedido={activePedido} /> : null}</DragOverlay>
+        <DragOverlay>
+          {activePedido ? <KanbanCard pedido={activePedido} /> : null}
+        </DragOverlay>
       </DndContext>
     </div>
   );
