@@ -1,365 +1,120 @@
-"use client";
-
-import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import Image from "next/image";
-import { toast } from "sonner";
-import { 
-  getLojas, 
-  getDashboardStats, getFinanceiro, getVendasDiarias, 
-  getTopProdutos, getStatsBairros, getStatsHorarios, getStatsPagamentos 
-} from "../services/api";
-
-import { 
-  DollarSign, ShoppingBag, TrendingUp, Percent, Loader2, 
-  LayoutDashboard, ListTodo, MessageSquare, LogOut, Target, Menu, ChevronLeft, MapPin
-} from "lucide-react";
-
-import { useLanguage } from "../contexts/LanguageContext";
+import Link from "next/link";
+import { ArrowRight, BarChart3, Bot, LayoutDashboard, Store, Zap } from "lucide-react";
+import ThemeToggle from "../components/ThemeToggle";
 import LanguageToggle from "../components/LanguageToggle";
 
-import SalesChart from "../components/SalesChart";
-import TopProducts from "../components/TopProducts";
-import BairrosChart from "../components/BairrosChart";
-import HorariosChart from "../components/HorariosChart";
-import PagamentosChart from "../components/PagamentosChart";
-import SimularPedidoButton from "../components/SimularPedidoButton";
-import ThemeToggle from "../components/ThemeToggle";
-import DashboardSettings, { DashboardConfig, ChartSize } from "../components/DashboardSettings";
-import KanbanBoard from "../components/KanbanBoard";
-import FeedbackView from "../components/FeedbackView"; 
-import MetaAnualModal from "../components/MetaAnualModal";
-import ExportButton from "../components/ExportButton";
-
-type MenuOption = 'dashboard' | 'operacao' | 'feedbacks';
-
-interface Loja {
-  id: number;
-  nome: string;
-}
-
-interface DashboardData {
-  stats: { faturamento_total: number; total_pedidos: number; ticket_medio: number; taxa_cancelamento: string };
-  financeiro: { bruto: number; lucro_liquido: number; margem_percentual: string };
-  vendasDiarias: { data: string; valor: number }[];
-  topProdutos: { nome: string; quantidade: number; receita: number }[];
-  bairros: { nome: string; valor: number }[];
-  horarios: { hora: string; pedidos: number }[];
-  pagamentos: { nome: string; valor: number }[];
-}
-
-export default function Dashboard() {
-  const router = useRouter();
-  const { lang, t, formatCurrency } = useLanguage();
-  const [activeMenu, setActiveMenu] = useState<MenuOption>('dashboard');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
-  const [lojas, setLojas] = useState<Loja[]>([]);
-  const [selectedLojaId, setSelectedLojaId] = useState<number | undefined>(undefined);
-
-  const [config, setConfig] = useState<DashboardConfig>({
-    showSales: true, salesSize: 'M', 
-    showTopProducts: true, topProductsSize: 'P',
-    showBairros: true, bairrosSize: 'M', 
-    showPagamentos: true, pagamentosSize: 'P',
-    showHorarios: true, horariosSize: 'G',
-    chartOrder: ['sales', 'topProducts', 'bairros', 'pagamentos', 'horarios']
-  });
-
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [periodo, setPeriodo] = useState<'hoje' | '7dias' | 'mensal'>('7dias');
-  const [isFiltering, setIsFiltering] = useState(false);
-  const [isMetaModalOpen, setIsMetaModalOpen] = useState(false);
-
-  const sizeMap: Record<ChartSize, string> = {
-    P: "lg:col-span-1", M: "lg:col-span-2", G: "lg:col-span-3"
-  };
-
-  useEffect(() => {
-    const fetchLojas = async () => {
-      try {
-        const lojasData = await getLojas();
-        setLojas(lojasData);
-      } catch (error) {
-        console.error("Erro ao carregar lojas:", error);
-      }
-    };
-    fetchLojas();
-  }, []);
-
-  const loadAllData = useCallback(async () => {
-    setIsFiltering(true);
-    try {
-      const [stats, financeiro, vendasDiarias, topProdutos, bairros, horarios, pagamentos] = await Promise.all([
-        getDashboardStats(periodo, selectedLojaId), 
-        getFinanceiro(periodo, selectedLojaId), 
-        getVendasDiarias(periodo, selectedLojaId),
-        getTopProdutos(periodo, selectedLojaId), 
-        getStatsBairros(periodo, selectedLojaId), 
-        getStatsHorarios(periodo, selectedLojaId), 
-        getStatsPagamentos(periodo, selectedLojaId)
-      ]);
-      setData({ stats, financeiro, vendasDiarias, topProdutos, bairros, horarios, pagamentos });
-    } catch (error) {
-      console.error("Sync error:", error);
-      toast.error(lang === 'en' ? "Failed to synchronize data." : "Erro ao sincronizar dados.");
-    } finally {
-      setLoading(false);
-      setIsFiltering(false);
-    }
-  }, [periodo, selectedLojaId, lang]);
-
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) router.push("/login");
-    else loadAllData();
-  }, [router, loadAllData]);
-
-  useEffect(() => {
-    const wsUrl = process.env.NEXT_PUBLIC_WS_URL || "ws://127.0.0.1:8000/ws/pedidos"; 
-    const socket = new WebSocket(wsUrl);
-
-    socket.onmessage = (event) => {
-      const socketData = JSON.parse(event.data);
-      if (socketData.action === "new_order" || socketData.action === "update_status") {
-        if (socketData.action === "new_order") {
-          toast.success(lang === 'en' ? "New Order Received!" : "Novo Pedido Recebido!", { description: `ID: ${socketData.id_pedido}` });
-        }
-        loadAllData(); 
-      }
-    };
-
-    return () => socket.close();
-  }, [loadAllData, lang]);
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user_name");
-    router.push("/login");
-  };
-
-  const renderChart = (chartId: string) => {
-    // ✅ Resolvido min-h-[400px] para min-h-100 nas divs dos gráficos
-    switch (chartId) {
-      case 'sales':
-        return config.showSales && (
-          <div key="sales" className={`${sizeMap[config.salesSize]} bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl flex flex-col min-h-100`}>
-            <SalesChart data={data!.vendasDiarias} />
-          </div>
-        );
-      case 'topProducts':
-        return config.showTopProducts && (
-          <div key="topProducts" className={`${sizeMap[config.topProductsSize]} bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl flex flex-col min-h-100`}>
-            <TopProducts data={data!.topProdutos} />
-          </div>
-        );
-      case 'bairros':
-        return config.showBairros && (
-          <div key="bairros" className={`${sizeMap[config.bairrosSize]} bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl flex flex-col min-h-100`}>
-            <BairrosChart data={data!.bairros} />
-          </div>
-        );
-      case 'pagamentos':
-        return config.showPagamentos && (
-          <div key="pagamentos" className={`${sizeMap[config.pagamentosSize]} bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl flex flex-col min-h-100`}>
-            <PagamentosChart data={data!.pagamentos} />
-          </div>
-        );
-      case 'horarios':
-        return config.showHorarios && (
-          <div key="horarios" className={`${sizeMap[config.horariosSize]} bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl flex flex-col min-h-100`}>
-            <HorariosChart data={data!.horarios} />
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
-
-  if (loading || !data) {
-    return (
-      <div className="min-h-screen bg-[#0A0A0B] flex flex-col items-center justify-center gap-6">
-        <div className="relative w-32 h-12 animate-pulse">
-            <Image src="/IfoodVetor.svg" alt="iFood" fill className="object-contain" priority />
-        </div>
-        <Loader2 className="animate-spin text-[#EA1D2C]" size={32} />
-        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500">
-          {lang === 'en' ? "Syncing Platform..." : "Sincronizando Plataforma..."}
-        </p>
-      </div>
-    );
-  }
-
-  const cards = [
-    { title: t.cards.revenue, value: formatCurrency(data.stats.faturamento_total), icon: DollarSign, color: "text-emerald-500", glow: "shadow-emerald-500/10" },
-    { title: t.cards.profit, value: formatCurrency(data.financeiro.lucro_liquido), icon: TrendingUp, color: "text-blue-500", glow: "shadow-blue-500/10" },
-    { title: t.cards.orders, value: data.stats.total_pedidos.toLocaleString(lang === 'en' ? 'en-US' : 'pt-BR'), icon: ShoppingBag, color: "text-purple-500", glow: "shadow-purple-500/10" },
-    { title: t.cards.margin, value: data.financeiro.margem_percentual, icon: Percent, color: "text-[#EA1D2C]", glow: "shadow-red-500/10" },
-  ];
-
-  const navItems = [
-    { id: 'dashboard' as const, label: t.menu.overview, icon: LayoutDashboard },
-    { id: 'operacao' as const, label: t.menu.management, icon: ListTodo },
-    { id: 'feedbacks' as const, label: t.menu.reviews, icon: MessageSquare },
-  ];
-
+export default function LandingPage() {
   return (
-    <div className="flex h-screen bg-[#F8FAFC] dark:bg-[#0A0A0B] overflow-hidden font-sans transition-colors duration-500">
+    <div className="min-h-screen bg-slate-50 dark:bg-[#0A0A0B] text-slate-900 dark:text-white transition-colors duration-500 font-sans selection:bg-[#EA1D2C] selection:text-white">
       
-      {/* SIDEBAR */}
-      <aside className={`bg-white dark:bg-[#111113] border-r border-slate-200 dark:border-white/5 flex flex-col transition-all duration-500 ease-in-out shrink-0 z-30 ${isSidebarOpen ? 'w-72' : 'w-24'}`}>
-        <div className="h-24 flex items-center px-6 border-b dark:border-white/5">
-          <div className="relative w-10 h-10 shrink-0">
-            <Image src="/IfoodVetor.svg" alt="iFood Logo" fill className="object-contain" priority />
-          </div>
-          {isSidebarOpen && <span className="ml-3 font-black text-xl tracking-tighter dark:text-white uppercase">Dashboard Pro</span>}
-        </div>
-
-        <nav className="p-4 space-y-3 mt-4 flex-1">
-          {navItems.map((item) => (
-            <button 
-              key={item.id}
-              onClick={() => setActiveMenu(item.id)}
-              className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all group relative ${activeMenu === item.id ? 'bg-[#EA1D2C] text-white shadow-xl shadow-red-500/20' : 'text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5'}`}
-            >
-              <item.icon size={22} strokeWidth={activeMenu === item.id ? 2.5 : 2} />
-              {isSidebarOpen && <span className="font-bold text-sm tracking-wide">{item.label}</span>}
-              {!isSidebarOpen && activeMenu === item.id && (
-                <div className="absolute left-0 w-1 h-8 bg-white rounded-r-full" />
-              )}
-            </button>
-          ))}
-        </nav>
-
-        <div className="p-4 border-t dark:border-white/5">
-          <button onClick={handleLogout} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl text-slate-400 hover:text-red-500 transition-all ${!isSidebarOpen && 'justify-center'}`}>
-            <LogOut size={20} />
-            {isSidebarOpen && <span className="font-bold text-sm">{t.menu.logout}</span>}
-          </button>
-        </div>
-      </aside>
-
-      {/* ÁREA PRINCIPAL */}
-      <main className="flex-1 overflow-y-auto relative custom-scrollbar">
-        {/* ✅ Resolvido max-w-[1600px] para max-w-400 */}
-        <div className="max-w-400 mx-auto p-6 lg:p-10">
-          
-          <header className="mb-12 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            <div className="flex items-center gap-4">
-              <button 
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="p-3 rounded-xl bg-white dark:bg-white/5 border dark:border-white/10 hover:scale-105 transition-transform text-slate-500 dark:text-slate-300"
-              >
-                {isSidebarOpen ? <ChevronLeft size={20} /> : <Menu size={20} />}
-              </button>
-              <div>
-                <h1 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">
-                  {activeMenu === 'dashboard' ? t.header.overview : activeMenu === 'operacao' ? t.header.orderTracking : t.header.reviews}
-                </h1>
-                <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-400 mt-1 flex items-center gap-2">
-                  <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span> {t.header.realTime}
-                </p>
-              </div>
+      {/* NAVBAR */}
+      <nav className="fixed top-0 w-full bg-white/80 dark:bg-[#0A0A0B]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 z-50">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-[#EA1D2C] rounded-xl flex items-center justify-center shadow-lg shadow-red-500/20">
+              <BarChart3 size={18} className="text-white" />
             </div>
-
-            <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
-              
-              <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <MapPin size={14} className="text-slate-400" />
-                </div>
-                <select 
-                  value={selectedLojaId || ''}
-                  onChange={(e) => setSelectedLojaId(e.target.value ? Number(e.target.value) : undefined)}
-                  className="appearance-none bg-white dark:bg-white/5 border dark:border-white/10 text-slate-700 dark:text-slate-200 text-[10px] font-black uppercase tracking-widest rounded-2xl pl-9 pr-8 py-3.5 hover:bg-slate-50 dark:hover:bg-white/10 transition-all cursor-pointer shadow-sm outline-none focus:ring-2 focus:ring-[#EA1D2C]/50"
-                >
-                  <option value="">{lang === 'en' ? 'Consolidated Group' : 'Rede Consolidada'}</option>
-                  {lojas.map(loja => (
-                    <option key={loja.id} value={loja.id}>{loja.nome}</option>
-                  ))}
-                </select>
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                  <ChevronLeft size={14} className="text-slate-400 -rotate-90" />
-                </div>
-              </div>
-
-              <div className="bg-white dark:bg-white/5 p-1.5 rounded-2xl border dark:border-white/10 flex gap-1 shadow-sm">
-                {(['hoje', '7dias', 'mensal'] as const).map((opt) => (
-                  <button
-                    key={opt}
-                    onClick={() => setPeriodo(opt)}
-                    className={`px-5 py-2 text-[10px] font-black uppercase rounded-xl transition-all ${periodo === opt ? 'bg-[#EA1D2C] text-white shadow-lg' : 'text-slate-500 hover:text-slate-800 dark:hover:text-white'}`}
-                  >
-                    {opt === 'hoje' ? (lang === 'en' ? 'Today' : 'Hoje') : opt === '7dias' ? (lang === 'en' ? '7 Days' : '7 Dias') : (lang === 'en' ? '30 Days' : '30 Dias')}
-                  </button>
-                ))}
-              </div>
-
+            <span className="font-black text-xl uppercase tracking-tighter">iFood Pro</span>
+          </div>
+          
+          <div className="flex items-center gap-6">
+            <div className="hidden md:flex items-center gap-4 mr-4">
               <LanguageToggle />
               <ThemeToggle />
-              <SimularPedidoButton lojaId={selectedLojaId} /> 
             </div>
-          </header>
+            <Link href="/login" className="text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-[#EA1D2C] transition-colors">
+              Entrar
+            </Link>
+            <Link href="/login" className="bg-[#EA1D2C] hover:bg-red-700 text-white px-6 py-2.5 rounded-xl text-sm font-black uppercase tracking-widest transition-all hover:scale-105 shadow-lg shadow-red-500/25">
+              Começar Grátis
+            </Link>
+          </div>
+        </div>
+      </nav>
 
-          <div id="area-relatorio" className={`transition-all duration-700 ${isFiltering ? 'blur-sm opacity-50' : 'opacity-100'}`}>
-            
-            {activeMenu === 'dashboard' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-                  {/* ✅ Resolvido hover:translate-y-[-4px] para hover:-translate-y-1 */}
-                  {cards.map((card, idx) => (
-                    <div key={idx} className={`bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl ${card.glow} hover:-translate-y-1 transition-all duration-300 group`}>
-                      <div className="flex justify-between items-center mb-6">
-                        <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">{card.title}</span>
-                        <div className={`p-3 rounded-2xl bg-slate-50 dark:bg-white/5 ${card.color} group-hover:scale-110 transition-transform`}><card.icon size={20} /></div>
-                      </div>
-                      <div className="text-3xl font-black tracking-tighter dark:text-white">{card.value}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 auto-rows-fr">
-                  {config.chartOrder.map((chartId) => renderChart(chartId))}
-                </div>
-
-                <div className="mt-8 flex flex-col sm:flex-row justify-end items-center gap-4 bg-white dark:bg-[#111113] p-4 rounded-3xl border dark:border-white/5 shadow-xl">
-                  <ExportButton targetId="area-relatorio" periodo={periodo} lojaId={selectedLojaId} />
-                  
-                  {/* ✅ Resolvido w-[1px] para w-px */}
-                  <div className="h-8 w-px bg-slate-200 dark:bg-white/10 hidden sm:block"></div>
-                  
-                  <button 
-                    onClick={() => setIsMetaModalOpen(true)} 
-                    className="group px-6 py-3 bg-slate-50 dark:bg-white/5 text-slate-700 dark:text-slate-200 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-slate-100 dark:hover:bg-white/10 transition-all flex items-center gap-3"
-                  >
-                    <Target size={16} className="text-[#EA1D2C] group-hover:rotate-90 transition-transform duration-500" />
-                    {lang === 'en' ? "Performance Targets" : "Metas de Desempenho"}
-                  </button>
-                  <DashboardSettings config={config} setConfig={setConfig} />
-                </div>
-              </div>
-            )}
-
-            {activeMenu === 'operacao' && (
-              <div className="bg-white dark:bg-[#111113] p-8 rounded-4xl border dark:border-white/5 shadow-xl min-h-[75vh]">
-                <KanbanBoard periodo={periodo} lojaId={selectedLojaId} />
-              </div>
-            )}
-
-            {activeMenu === 'feedbacks' && (
-              <FeedbackView periodo={periodo} lojaId={selectedLojaId} />
-            )}
-
+      {/* HERO SECTION */}
+      <main className="pt-32 pb-20 px-6">
+        <div className="max-w-7xl mx-auto text-center mt-12 md:mt-20">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-red-50 dark:bg-red-500/10 text-[#EA1D2C] text-xs font-black uppercase tracking-widest mb-8 border border-red-100 dark:border-red-500/20">
+            <Bot size={14} /> Inteligência Artificial Integrada
+          </div>
+          
+          <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter leading-[1.1] mb-8">
+            O Controle Absoluto <br />
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#EA1D2C] to-orange-500">
+              Da Sua Operação
+            </span>
+          </h1>
+          
+          <p className="text-lg md:text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto mb-10 font-medium leading-relaxed">
+            Escale o seu delivery com o único dashboard Multi-loja que analisa os seus feedbacks com IA e organiza os seus pedidos num Kanban em tempo real.
+          </p>
+          
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link href="/dashboard" className="w-full sm:w-auto bg-[#EA1D2C] text-white px-8 py-4 rounded-2xl text-sm font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-[0_0_40px_rgba(234,29,44,0.3)] flex items-center justify-center gap-2 group">
+              Acessar Dashboard
+              <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+            </Link>
           </div>
         </div>
       </main>
 
-      <MetaAnualModal 
-        isOpen={isMetaModalOpen} 
-        onClose={() => setIsMetaModalOpen(false)} 
-        lojaId={selectedLojaId} 
-      />
+      {/* BENTO GRID (FEATURES) */}
+      <section className="py-20 px-6 bg-white dark:bg-[#111113] border-t border-slate-200 dark:border-white/5">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl font-black uppercase tracking-tighter mb-4">Recursos de Nível Enterprise</h2>
+            <p className="text-slate-500">Desenvolvido para operações de alto volume.</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Feature 1 */}
+            <div className="p-8 rounded-[40px] bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 hover:-translate-y-2 transition-transform duration-300">
+              <div className="w-12 h-12 bg-blue-500/10 text-blue-500 rounded-2xl flex items-center justify-center mb-6">
+                <Store size={24} />
+              </div>
+              <h3 className="text-lg font-black uppercase tracking-tight mb-3">Multi-loja Nativo</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                Gira todas as unidades do seu restaurante (CNPJs diferentes) a partir de um único ecrã consolidado.
+              </p>
+            </div>
+
+            {/* Feature 2 */}
+            <div className="p-8 rounded-[40px] bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 hover:-translate-y-2 transition-transform duration-300">
+              <div className="w-12 h-12 bg-red-500/10 text-[#EA1D2C] rounded-2xl flex items-center justify-center mb-6">
+                <Bot size={24} />
+              </div>
+              <h3 className="text-lg font-black uppercase tracking-tight mb-3">Análise com Gemini IA</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                Não perca tempo a ler centenas de reviews. A nossa IA extrai os problemas críticos e recomenda soluções automáticas.
+              </p>
+            </div>
+
+            {/* Feature 3 */}
+            <div className="p-8 rounded-[40px] bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 hover:-translate-y-2 transition-transform duration-300">
+              <div className="w-12 h-12 bg-emerald-500/10 text-emerald-500 rounded-2xl flex items-center justify-center mb-6">
+                <LayoutDashboard size={24} />
+              </div>
+              <h3 className="text-lg font-black uppercase tracking-tight mb-3">Kanban Operacional</h3>
+              <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+                Acompanhe o fluxo de pedidos da cozinha à entrega num quadro interativo desenhado para reduzir o stress.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FOOTER CTA */}
+      <footer className="py-24 px-6 text-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-[#EA1D2C]/5 dark:bg-[#EA1D2C]/10"></div>
+        <div className="relative max-w-3xl mx-auto flex flex-col items-center">
+          <Zap size={40} className="text-[#EA1D2C] mb-6 animate-pulse" />
+          <h2 className="text-4xl font-black uppercase tracking-tighter mb-6">Pronto para dominar o seu mercado?</h2>
+          <Link href="/login" className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-10 py-5 rounded-2xl text-xs font-black uppercase tracking-[0.2em] hover:scale-105 transition-transform shadow-xl">
+            Criar Conta Gratuita
+          </Link>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 from datetime import datetime
 from typing import List, Optional
 
@@ -10,8 +10,8 @@ class LojaBase(BaseModel):
 
 class LojaResponse(LojaBase):
     id: int
-    class Config:
-        from_attributes = True
+    
+    model_config = ConfigDict(from_attributes=True)
 
 # --- SCHEMAS DE ITENS ---
 class ItemPedidoSchema(BaseModel):
@@ -20,8 +20,7 @@ class ItemPedidoSchema(BaseModel):
     preco_unitario: float
     custo_producao: Optional[float] = 0.0
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- SCHEMAS DE PEDIDO (Atualizado com Loja e Tempo) ---
 class PedidoSchema(BaseModel):
@@ -36,8 +35,7 @@ class PedidoSchema(BaseModel):
     data_entrega: Optional[datetime] = None  # Necessário para calcular o KPI de tempo
     itens: List[ItemPedidoSchema]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- SCHEMAS DE USUÁRIO (Corrigido) ---
 class UsuarioCreate(BaseModel):
@@ -50,8 +48,7 @@ class UsuarioResponse(BaseModel):
     nome: str
     email: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- SCHEMAS DE AVALIAÇÃO (Vinculado à Loja) ---
 class AvaliacaoBase(BaseModel):
@@ -68,8 +65,7 @@ class AvaliacaoResponse(AvaliacaoBase):
     loja_id: int
     data: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 # --- SCHEMAS DE DASHBOARD / RELATÓRIOS ---
 class DashboardStats(BaseModel):

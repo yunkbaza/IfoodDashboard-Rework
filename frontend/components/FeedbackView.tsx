@@ -24,7 +24,7 @@ interface Insight {
   dica: string;
 }
 
-// ✅ ADICIONADO O SUPORTE PARA lojaId NAS PROPS
+// ✅ SUPORTE PARA lojaId NAS PROPS
 interface FeedbackViewProps {
   periodo?: string;
   lojaId?: number;
@@ -37,15 +37,13 @@ export default function FeedbackView({ periodo = '7dias', lojaId }: FeedbackView
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // ✅ Função centralizada com useCallback para obedecer às dependências
+  // ✅ Função centralizada para carregar dados do banco e da IA
   const carregarDados = useCallback(async () => {
     setIsAnalyzing(true);
     try {
-      // 🔄 Passando a lojaId para buscar apenas da loja selecionada
       const dadosBanco = await getAvaliacoes(periodo, lojaId);
       setFeedbacks(dadosBanco);
 
-      // Envia textos para análise do Gemini
       if (dadosBanco && dadosBanco.length > 0) {
         const textosParaIA = dadosBanco.map((f: Feedback) => f.texto);
         const respostaIA = await getAnaliseIA(textosParaIA);
@@ -66,7 +64,6 @@ export default function FeedbackView({ periodo = '7dias', lojaId }: FeedbackView
     }
   }, [periodo, lojaId, lang]);
 
-  // Recarrega sempre que o período ou a loja mudar
   useEffect(() => {
     carregarDados();
   }, [carregarDados]);
@@ -106,7 +103,7 @@ export default function FeedbackView({ periodo = '7dias', lojaId }: FeedbackView
 
           {feedbacks.map((fb, index) => (
             <div 
-              key={fb.id || index} 
+              key={fb.id || `feedback-${index}`} 
               className="bg-white dark:bg-[#1C1C1E] p-6 rounded-3xl border border-slate-100 dark:border-[#2C2C2E] shadow-sm flex gap-4 hover:border-[#EA1D2C]/30 transition-all group"
             >
               <div className="shrink-0 pt-1">
@@ -118,7 +115,7 @@ export default function FeedbackView({ periodo = '7dias', lojaId }: FeedbackView
                 <div className="flex justify-between items-start mb-2">
                   <div>
                     <h4 className="font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      {fb.cliente}
+                      <span>{fb.cliente}</span>
                       <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${fb.sentimento === 'positivo' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
                         {fb.sentimento === 'positivo' ? <ThumbsUp size={10} /> : <ThumbsDown size={10} />}
                         {fb.sentimento === 'positivo' ? t.feedbacks.positive : t.feedbacks.negative}
@@ -130,7 +127,7 @@ export default function FeedbackView({ periodo = '7dias', lojaId }: FeedbackView
                   </div>
                   <div className="flex gap-1 bg-slate-50 dark:bg-[#242426] p-1.5 rounded-lg border border-slate-100 dark:border-[#3C3C3E]">
                     {[1, 2, 3, 4, 5].map((star) => (
-                      <Star key={star} size={14} className={star <= fb.nota ? "fill-yellow-400 text-yellow-400" : "text-slate-200 dark:text-slate-700"} />
+                      <Star key={`star-${fb.id}-${star}`} size={14} className={star <= fb.nota ? "fill-yellow-400 text-yellow-400" : "text-slate-200 dark:text-slate-700"} />
                     ))}
                   </div>
                 </div>
@@ -185,21 +182,30 @@ export default function FeedbackView({ periodo = '7dias', lojaId }: FeedbackView
 
                   <div className="space-y-4">
                     {insights.map((insight, index) => (
-                      <div key={index} className="bg-slate-50 dark:bg-[#242426] p-4 rounded-2xl border border-slate-100 dark:border-[#2C2C2E] relative overflow-hidden group hover:border-[#EA1D2C]/20 transition-all">
+                      <div 
+                        key={`insight-${index}-${insight.titulo.substring(0, 5)}`} 
+                        className="bg-slate-50 dark:bg-[#242426] p-4 rounded-2xl border border-slate-100 dark:border-[#2C2C2E] relative overflow-hidden group hover:border-[#EA1D2C]/20 transition-all"
+                      >
                         <div className={`absolute left-0 top-0 bottom-0 w-1 ${insight.tipo === 'TrendingDown' ? 'bg-orange-500' : 'bg-red-500'}`}></div>
                         
                         <div className={`flex items-center gap-2 mb-3 font-bold text-[10px] uppercase tracking-wider ${insight.tipo === 'TrendingDown' ? 'text-orange-600' : 'text-red-600'}`}>
-                          {insight.tipo === 'TrendingDown' ? <TrendingDown size={14} /> : <AlertTriangle size={14} />} 
-                          {insight.titulo}
+                          {/* ✅ Ícone e Texto em SPAN para estabilidade do DOM */}
+                          <span className="flex items-center justify-center shrink-0">
+                            {insight.tipo === 'TrendingDown' ? <TrendingDown size={14} /> : <AlertTriangle size={14} />} 
+                          </span>
+                          <span>{insight.titulo}</span>
                         </div>
                         
-                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mb-3">
-                          <span className="font-bold text-slate-800 dark:text-slate-200">{t.feedbacks.context}:</span> {insight.reclamacao}
-                        </p>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mb-3">
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{t.feedbacks.context}: </span>
+                          <span>{insight.reclamacao}</span>
+                        </div>
+
                         <div className="bg-emerald-50 dark:bg-emerald-900/20 p-2.5 rounded-xl border border-emerald-100 dark:border-emerald-900/30">
-                           <p className="text-[10px] text-emerald-700 dark:text-emerald-400 leading-tight">
-                             <span className="font-black uppercase tracking-tighter mr-1">{t.feedbacks.recommendation}:</span> {insight.dica}
-                           </p>
+                           <div className="text-[10px] text-emerald-700 dark:text-emerald-400 leading-tight">
+                             <span className="font-black uppercase tracking-tighter mr-1">{t.feedbacks.recommendation}:</span> 
+                             <span>{insight.dica}</span>
+                           </div>
                         </div>
                       </div>
                     ))}
@@ -216,7 +222,7 @@ export default function FeedbackView({ periodo = '7dias', lojaId }: FeedbackView
 
       </div>
 
-      {/* MODAL DE SIMULAÇÃO (Enviando a lojaId) */}
+      {/* MODAL DE SIMULAÇÃO */}
       <SimularAvaliacaoModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 

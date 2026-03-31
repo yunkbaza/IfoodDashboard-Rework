@@ -1,10 +1,10 @@
 import os
 import json
-import csv
-import io
+import requests
 import random
 import re
-import requests
+import csv
+import io
 from datetime import datetime, timedelta
 from typing import List, Optional, Generator
 
@@ -13,22 +13,22 @@ from fastapi import FastAPI, Depends, Query, HTTPException, WebSocket, WebSocket
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+from sqlalchemy import func, cast, Date, desc, extract 
 from pydantic import BaseModel
 import uvicorn
 from dotenv import load_dotenv
 
-# SQLAlchemy
-from sqlalchemy.orm import Session
-from sqlalchemy import func, cast, Date, desc, extract 
-
 # Importações do projeto
 from app.core.database import get_db, engine
 from app.models.pedido import Pedido, ItemPedido, Usuario, Avaliacao, Base, Loja
+from app.schemas.pedido import PedidoSchema
 from app.core.auth import verificar_senha, obter_hash_senha, criar_token_acesso
 
 # ==========================================
 # 🚀 INICIALIZAÇÃO E CONFIGURAÇÃO
 # ==========================================
+# O override=True garante que a chave nova do .env seja lida ignorando o cache
 load_dotenv(override=True)
 Base.metadata.create_all(bind=engine)
 
@@ -260,10 +260,11 @@ def get_stats_pagamentos(loja_id: Optional[int] = None, periodo: str = Query("7d
 def get_meta_anual(loja_id: Optional[int] = None, db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     faturamento = apply_filters(db.query(func.sum(Pedido.valor_total)).filter(Pedido.status == "CONCLUIDO", extract('year', Pedido.data_hora) == datetime.now().year), Pedido, 'mensal', loja_id).scalar() or 0.0
     meta = 150000.0 if loja_id else 500000.0
-    return {"valor_meta": meta, "valor_atual": round(faturamento, 2), "percentual": min(round((faturamento / meta) * 100, 1), 100.0) if meta > 0 else 0}
+    percentual = min(round((faturamento / meta) * 100, 1), 100.0) if meta > 0 else 0
+    return {"valor_meta": meta, "valor_atual": round(faturamento, 2), "percentual": percentual}
 
 # ==========================================
-# 📄 MÓDULO DE EXPORTAÇÃO (STREAMING REAL)
+# 📄 MÓDULO DE EXPORTAÇÃO (STREAMING DE DADOS)
 # ==========================================
 def gerador_csv_pedidos(pedidos: Generator) -> Generator[str, None, None]:
     output = io.StringIO()
@@ -282,7 +283,7 @@ def gerador_csv_pedidos(pedidos: Generator) -> Generator[str, None, None]:
 @app.get("/api/dashboard/exportar")
 def exportar_dados(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
     query = apply_filters(db.query(Pedido), Pedido, periodo, loja_id)
-    # yield_per evita que o servidor carregue milhares de linhas na RAM de uma vez
+    # yield_per evita que o servidor carregue milhares de linhas na RAM de uma vez (Anti-Crash)
     pedidos_generator = query.yield_per(100) 
     
     return StreamingResponse(
@@ -292,7 +293,7 @@ def exportar_dados(loja_id: Optional[int] = None, periodo: str = Query("7dias"),
     )
 
 # ==========================================
-# 🧠 MÓDULO DE IA E AVALIAÇÕES (GEMINI)
+# 🧠 MÓDULO DE IA E AVALIAÇÕES (GEMINI 2.5)
 # ==========================================
 @app.get("/api/avaliacoes")
 def listar_avaliacoes(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
@@ -312,33 +313,43 @@ def analisar_feedbacks_ia(request: FeedbackRequest, token: str = Depends(oauth2_
     if not API_KEY:
         return [{"tipo": "AlertTriangle", "titulo": "Erro", "reclamacao": "API Key ausente.", "dica": "Configure o .env"}]
 
-    # Debug de segurança para validar a leitura da chave nova
+    # Debug de segurança no terminal
     print(f"\n---> CHAVE LIDA: {str(API_KEY)[:10]}...{str(API_KEY)[-5:]} <---\n")
 
     try:
+        # Prompt blindado para garantir o JSON correto
         prompt = f"""
-        Como Analista de Qualidade Sênior, avalie os seguintes feedbacks: {request.feedbacks}. 
-        Retorne APENAS um array JSON válido. É OBRIGATÓRIO ter estas 4 chaves em cada objeto:
-        - "tipo": "TrendingDown" ou "AlertTriangle".
-        - "titulo": título curto do problema.
-        - "reclamacao": contexto ou resumo do problema.
-        - "dica": recomendação prática e direta.
-        NÃO retorne markdown ou texto extra.
+        Como Analista de Qualidade Sênior, avalie os seguintes feedbacks de clientes: {request.feedbacks}. 
+        Retorne APENAS um array JSON válido. É OBRIGATÓRIO que cada objeto do array tenha EXATAMENTE estas 4 chaves:
+        - "tipo": use "TrendingDown" para quedas ou "AlertTriangle" para alertas.
+        - "titulo": um título muito curto do problema.
+        - "reclamacao": o contexto ou resumo do problema relatado.
+        - "dica": a sua recomendação prática e direta de ação.
+        NÃO retorne texto ou markdown fora do JSON.
         """
         
         url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={API_KEY}"
-        payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2}}
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}], 
+            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.2}
+        }
         
+        # Timeout aumentado para 45s para evitar erros em grandes análises
         resposta = requests.post(url, json=payload, timeout=45)
         if resposta.status_code != 200:
-            return [{"tipo": "AlertTriangle", "titulo": "Erro API", "reclamacao": f"Status {resposta.status_code}", "dica": "Verifique os logs"}]
+            print(f"ERRO GOOGLE API: {resposta.status_code} - {resposta.text}") 
+            return [{"tipo": "AlertTriangle", "titulo": "Erro API", "reclamacao": "Google API Offline", "dica": "Tente mais tarde"}]
 
         texto_ia = resposta.json()['candidates'][0]['content']['parts'][0]['text']
+        
+        # Extração segura do JSON via regex
         match = re.search(r'\[.*\]', texto_ia, re.DOTALL)
-        return json.loads(match.group(0)) if match else [{"tipo": "AlertTriangle", "titulo": "Erro IA", "reclamacao": "Formato inválido.", "dica": "Repita."}]
+        if match:
+            return json.loads(match.group(0))
+        return [{"tipo": "AlertTriangle", "titulo": "Erro IA", "reclamacao": "Formato inválido.", "dica": "Repita a operação"}]
         
     except Exception as e:
-        return [{"tipo": "AlertTriangle", "titulo": "Erro", "reclamacao": str(e), "dica": "Verifique o servidor"}]
+        return [{"tipo": "AlertTriangle", "titulo": "Erro Crítico", "reclamacao": str(e), "dica": "Verifique o servidor"}]
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

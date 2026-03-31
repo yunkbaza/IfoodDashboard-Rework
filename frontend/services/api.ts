@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000/api";
 
 // ==========================================
 // 🛡️ INTERFACES DE DADOS (TIPAGEM ESTRITA)
@@ -29,12 +29,19 @@ export interface LojaData {
   nome: string;
 }
 
+export interface InsightIA {
+  tipo: 'TrendingDown' | 'AlertTriangle';
+  titulo: string;
+  reclamacao: string;
+  dica: string;
+}
+
 // ==========================================
 // 🛠️ FUNÇÕES AUXILIARES
 // ==========================================
 
 /**
- * Helper para gerir autenticação e headers globais.
+ * Recupera o token do localStorage e gera os headers de autenticação.
  */
 function getAuthHeaders() {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -45,7 +52,7 @@ function getAuthHeaders() {
 }
 
 /**
- * Helper DRY (Don't Repeat Yourself) para aplicar filtros de periodo e loja_id na URL
+ * Helper central para requisições GET com filtros de período e loja (Multi-loja).
  */
 async function fetchWithFilter(endpoint: string, periodo?: string, lojaId?: number) {
   const url = new URL(`${API_URL}${endpoint}`);
@@ -54,11 +61,18 @@ async function fetchWithFilter(endpoint: string, periodo?: string, lojaId?: numb
   if (lojaId) url.searchParams.append('loja_id', lojaId.toString());
 
   const res = await fetch(url.toString(), { 
-    cache: 'no-store', 
+    cache: 'no-store', // Garante dados sempre frescos
     headers: getAuthHeaders() 
   });
   
-  if (res.status === 401) throw new Error('Sessão expirada. Faça login novamente.');
+  if (res.status === 401) {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
+    }
+    throw new Error('Sessão expirada. Faça login novamente.');
+  }
+
   if (!res.ok) throw new Error(`Falha na requisição para ${endpoint}`);
   
   return res.json();
@@ -74,7 +88,7 @@ export async function login(formData: FormData) {
 
   const res = await fetch(`${API_URL}/auth/login`, {
     method: 'POST',
-    body: data,
+    body: data, // OAuth2 espera form-data
   });
   
   if (!res.ok) {
@@ -99,17 +113,17 @@ export async function registrar(userData: RegisterData) {
 }
 
 // ==========================================
-// 🏢 MÓDULO: LOJAS
+// 🏢 MÓDULO: GESTÃO DE LOJAS
 // ==========================================
 
 export async function getLojas(): Promise<LojaData[]> {
   const res = await fetch(`${API_URL}/lojas`, { headers: getAuthHeaders() });
-  if (!res.ok) throw new Error('Erro ao buscar lojas');
+  if (!res.ok) throw new Error('Erro ao buscar lista de lojas');
   return res.json();
 }
 
 // ==========================================
-// 📊 MÓDULO: DASHBOARD (MÉTRICAS MULTI-LOJA)
+// 📊 MÓDULO: ANALYTICS (DASHBOARD)
 // ==========================================
 
 export const getDashboardStats = (p: string = '7dias', l?: number) => fetchWithFilter('/dashboard/stats', p, l);
@@ -136,7 +150,7 @@ export async function atualizarStatusPedido(idPedido: string, novoStatus: string
     headers: getAuthHeaders(),
     body: JSON.stringify({ status: novoStatus })
   });
-  if (!res.ok) throw new Error('Falha ao atualizar o status');
+  if (!res.ok) throw new Error('Falha ao atualizar o status do pedido');
   return res.json();
 }
 
@@ -148,12 +162,12 @@ export async function simularPedido(lojaId?: number) {
     method: 'POST',
     headers: getAuthHeaders()
   });
-  if (!res.ok) throw new Error('Falha ao simular pedido');
+  if (!res.ok) throw new Error('Falha ao simular pedido em tempo real');
   return res.json();
 }
 
 // ==========================================
-// 🤖 MÓDULO: FEEDBACK & IA
+// 🤖 MÓDULO: FEEDBACK & INTELIGÊNCIA ARTIFICIAL
 // ==========================================
 
 export const getAvaliacoes = (p: string = '7dias', l?: number) => fetchWithFilter('/avaliacoes', p, l);
@@ -164,39 +178,49 @@ export async function createAvaliacao(dados: AvaliacaoCreateData) {
     headers: getAuthHeaders(),
     body: JSON.stringify(dados),
   });
-  if (!res.ok) throw new Error('Falha ao criar avaliação');
+  if (!res.ok) throw new Error('Falha ao registar avaliação');
   return res.json();
 }
 
-export async function getAnaliseIA(feedbacks: string[]) {
+/**
+ * Envia feedbacks para análise síncrona do Gemini 2.5
+ */
+export async function getAnaliseIA(feedbacks: string[]): Promise<InsightIA[]> {
   const res = await fetch(`${API_URL}/feedbacks/analise`, {
     method: 'POST',
     headers: getAuthHeaders(),
     body: JSON.stringify({ feedbacks })
   });
-  if (!res.ok) throw new Error('Falha ao conectar com a IA');
+  if (!res.ok) throw new Error('A IA está a processar muitos dados. Tente novamente em breve.');
   return res.json();
 }
 
 // ==========================================
-// 📄 MÓDULO: EXPORTAÇÃO
+// 📄 MÓDULO: EXPORTAÇÃO (AUDITORIA)
 // ==========================================
 
+/**
+ * Lida com o download do CSV gerado por streaming no backend.
+ */
 export async function downloadRelatorio(periodo: string = '7dias', lojaId?: number) {
   const url = new URL(`${API_URL}/dashboard/exportar`);
   url.searchParams.append('periodo', periodo);
   if (lojaId) url.searchParams.append('loja_id', lojaId.toString());
 
   const res = await fetch(url.toString(), { headers: getAuthHeaders() });
-  if (!res.ok) throw new Error('Falha ao exportar relatório');
+  if (!res.ok) throw new Error('O servidor de relatórios está ocupado.');
 
+  // Recebe o stream como blob para não sobrecarregar a memória do browser
   const blob = await res.blob();
   const downloadUrl = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
   
   link.href = downloadUrl;
-  link.setAttribute('download', `relatorio_auditoria_${periodo}.csv`);
+  link.setAttribute('download', `auditoria_ifood_${lojaId || 'geral'}_${periodo}.csv`);
   document.body.appendChild(link);
   link.click();
+  
+  // Limpeza
   link.remove();
+  window.URL.revokeObjectURL(downloadUrl);
 }

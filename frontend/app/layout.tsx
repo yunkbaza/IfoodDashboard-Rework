@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "../components/ThemeProvider";
-import { LanguageProvider } from "../contexts/LanguageContext"; // ✅ 1. Importação do Provider de Idioma
+import { LanguageProvider } from "../contexts/LanguageContext";
 import { Toaster } from "sonner";
 
 const geistSans = Geist({
@@ -26,10 +26,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    // O suppressHydrationWarning é necessário para evitar conflitos com o next-themes
     <html lang="en" suppressHydrationWarning>
       <body 
         className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-full flex flex-col bg-slate-50 dark:bg-[#0A0A0B] transition-colors duration-300`}
+        // ✅ Corrigido: suppressHydrationWarning adicionado ao body para evitar erros de extensões/Playwright
+        suppressHydrationWarning
       >
         <ThemeProvider 
           attribute="class" 
@@ -37,11 +38,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {/* ✅ 2. Envolvendo a aplicação com o Provider de Idioma */}
           <LanguageProvider>
             {children}
             
-            {/* ✅ 3. Toaster configurado para notificações elegantes */}
             <Toaster 
               position="top-right" 
               richColors 
