@@ -1,5 +1,7 @@
 # 🍔 iFood Dashboard Pro | Enterprise Delivery SaaS
 
+<img width="1440" height="898" alt="Captura de Tela 2026-03-31 às 15 42 21" src="https://github.com/user-attachments/assets/7e08f915-1cb5-45a3-ac7e-b972ec229b7c" />
+
 > **Plataforma de Gestão Multi-Loja, Inteligência Operacional e Análise de Sentimento com IA para Delivery.**
 
 ## 📑 Índice
@@ -52,6 +54,9 @@ Painel central configurável focado em KPIs financeiros e logísticos.
       * *Heatmap Logístico:* Volume de pedidos segmentado por bairro/região.
       * *Métricas de Pico:* Análise de carga de trabalho por faixas de horário.
       * *Distribuição Financeira:* Receita segmentada por método de pagamento (Pix, Crédito, etc.).
+   
+    <img width="1440" height="900" alt="Captura de Tela 2026-03-31 às 15 55 13" src="https://github.com/user-attachments/assets/995e6d24-6c64-4fe6-ab4e-96ea44240473" />
+
 
 ### B. Módulo de Operação (Kanban Real-Time)
 
