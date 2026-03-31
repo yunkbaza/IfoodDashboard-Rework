@@ -130,5 +130,38 @@ export const pt = {
     today: "Hoje",
     last7Days: "7 Dias",
     last30Days: "30 Dias"
+  },
+  landing: {
+    nav: {
+      login: "Entrar",
+      startFree: "Começar Grátis"
+    },
+    hero: {
+      aiTag: "Inteligência Artificial Integrada",
+      titlePart1: "O Controle Absoluto",
+      titlePart2: "Da Sua Operação",
+      description: "Escale o seu delivery com o único dashboard Multi-loja que analisa os seus feedbacks com IA e organiza os seus pedidos num Kanban em tempo real.",
+      button: "Acessar Dashboard"
+    },
+    features: {
+      title: "Recursos de Nível Enterprise",
+      subtitle: "Desenvolvido para operações de alto volume.",
+      multiStore: {
+        title: "Multi-loja Nativo",
+        desc: "Gira todas as unidades do seu restaurante (CNPJs diferentes) a partir de um único ecrã consolidado."
+      },
+      ai: {
+        title: "Análise com Gemini IA",
+        desc: "Não perca tempo a ler centenas de reviews. A nossa IA extrai os problemas críticos e recomenda soluções automáticas."
+      },
+      kanban: {
+        title: "Kanban Operacional",
+        desc: "Acompanhe o fluxo de pedidos da cozinha à entrega num quadro interativo desenhado para reduzir o stress."
+      }
+    },
+    footer: {
+      title: "Pronto para dominar o seu mercado?",
+      button: "Criar Conta Gratuita"
+    }
   }
 };

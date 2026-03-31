@@ -130,5 +130,39 @@ export const en = {
     today: "Today",
     last7Days: "7 Days",
     last30Days: "30 Days"
+  },
+  // ✅ Adicionado o bloco da Landing Page
+  landing: {
+    nav: {
+      login: "Login",
+      startFree: "Start for Free"
+    },
+    hero: {
+      aiTag: "Integrated Artificial Intelligence",
+      titlePart1: "Total Control Over",
+      titlePart2: "Your Operation",
+      description: "Scale your delivery business with the only multi-store dashboard that analyzes feedback using AI and organizes orders in a real-time Kanban board.",
+      button: "Access Dashboard"
+    },
+    features: {
+      title: "Enterprise-Grade Features",
+      subtitle: "Built for high-volume operations.",
+      multiStore: {
+        title: "Native Multi-Store",
+        desc: "Manage all your restaurant locations (different legal entities) from a single, consolidated screen."
+      },
+      ai: {
+        title: "Gemini AI Analysis",
+        desc: "Stop wasting time reading hundreds of reviews. Our AI extracts critical issues and recommends automated solutions."
+      },
+      kanban: {
+        title: "Operational Kanban",
+        desc: "Track the flow of orders from kitchen to delivery on an interactive board designed to reduce stress."
+      }
+    },
+    footer: {
+      title: "Ready to dominate your market?",
+      button: "Create Free Account"
+    }
   }
 };

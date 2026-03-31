@@ -11,19 +11,18 @@ import {
   CartesianGrid 
 } from 'recharts';
 import { Trophy } from "lucide-react";
-import { useLanguage } from "../contexts/LanguageContext"; //
+import { useLanguage } from "../contexts/LanguageContext";
 
 interface Product {
   nome: string;
   quantidade: number;
-  receita: number;
+  receita?: number; // ✅ Tornamos opcional por segurança
 }
 
 export default function TopProducts({ data }: { data: Product[] }) {
-  // ✅ Extraindo formatCurrency para conversão real
   const { lang, t, formatCurrency } = useLanguage(); 
 
-  // ✅ PALETA IFOOD EXCLUSIVA: Variações de hierarquia para o ranking
+  // Paleta iFood exclusiva
   const IFOOD_PALETTE = [
     '#EA1D2C', // 1º Lugar
     '#B31622', // 2º Lugar
@@ -33,10 +32,9 @@ export default function TopProducts({ data }: { data: Product[] }) {
   ];
 
   return (
-    // ✅ ESTRUTURA ELÁSTICA: Garante o encaixe perfeito no grid dinâmico
     <div className="flex-1 flex flex-col min-h-0 w-full group">
       
-      {/* Cabeçalho Refinado e Traduzido */}
+      {/* Cabeçalho */}
       <div className="mb-6 shrink-0">
         <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.4em] mb-1">
           {t.charts.topProducts.subtitle}
@@ -51,7 +49,7 @@ export default function TopProducts({ data }: { data: Product[] }) {
         </div>
       </div>
 
-      {/* Container do Gráfico */}
+      {/* Gráfico */}
       <div className="flex-1 min-h-0 w-full relative">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart 
@@ -93,12 +91,12 @@ export default function TopProducts({ data }: { data: Product[] }) {
               }}
             />
 
-            {/* Tooltip com Conversão Real */}
+            {/* Tooltip com Proteção Anti-NaN */}
             <Tooltip 
               cursor={{ fill: 'rgba(234, 29, 44, 0.04)' }}
               content={({ active, payload }) => {
                 if (active && payload && payload.length) {
-                  const item = payload[0].payload;
+                  const item = payload[0].payload as Product;
                   return (
                     <div className="bg-white/95 dark:bg-[#111113]/95 backdrop-blur-xl p-5 rounded-3xl shadow-2xl border border-slate-100 dark:border-white/10 ring-1 ring-black/5 animate-in fade-in zoom-in-95 duration-200">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
@@ -112,8 +110,8 @@ export default function TopProducts({ data }: { data: Product[] }) {
                           {item.quantidade} {t.charts.topProducts.sold}
                         </p>
                         <p className="text-xl font-black text-emerald-500 tabular-nums">
-                          {/* ✅ Aplicando a conversão e formatação real */}
-                          {formatCurrency(item.receita)}
+                          {/* ✅ RESOLVIDO: O "|| 0" impede que o valor vire NaN se vier undefined */}
+                          {formatCurrency(item.receita || 0)}
                         </p>
                       </div>
                     </div>
@@ -142,7 +140,7 @@ export default function TopProducts({ data }: { data: Product[] }) {
         </ResponsiveContainer>
       </div>
 
-      {/* Footer Traduzido */}
+      {/* Footer */}
       <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 flex justify-between items-center shrink-0">
         <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-widest">
           {t.charts.topProducts.footer}

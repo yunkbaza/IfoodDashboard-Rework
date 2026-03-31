@@ -232,10 +232,25 @@ def get_vendas_diarias(loja_id: Optional[int] = None, periodo: str = Query("7dia
 
 @app.get("/api/dashboard/top-produtos")
 def get_top_produtos(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
-    query = db.query(ItemPedido.nome_produto.label("nome"), func.sum(ItemPedido.quantidade).label("quantidade")).join(Pedido, Pedido.id_pedido == ItemPedido.id_pedido)
+    # ✅ CORREÇÃO: Adicionámos o cálculo da receita multiplicando quantidade pelo preço
+    query = db.query(
+        ItemPedido.nome_produto.label("nome"), 
+        func.sum(ItemPedido.quantidade).label("quantidade"),
+        func.sum(ItemPedido.quantidade * ItemPedido.preco_unitario).label("receita")
+    ).join(Pedido, Pedido.id_pedido == ItemPedido.id_pedido)
+    
     query = apply_filters(query, Pedido, periodo, loja_id).filter(Pedido.status == "CONCLUIDO")
     resultados = query.group_by(ItemPedido.nome_produto).order_by(desc("quantidade")).limit(5).all()
-    return [{"nome": r.nome, "quantidade": int(r.quantidade)} for r in resultados]
+    
+    # ✅ Retorna também a receita calculada
+    return [
+        {
+            "nome": r.nome, 
+            "quantidade": int(r.quantidade), 
+            "receita": float(r.receita or 0)
+        } 
+        for r in resultados
+    ]
 
 @app.get("/api/dashboard/bairros")
 def get_stats_bairros(loja_id: Optional[int] = None, periodo: str = Query("7dias"), db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)):
