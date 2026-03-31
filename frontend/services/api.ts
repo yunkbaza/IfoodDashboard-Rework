@@ -118,10 +118,16 @@ export async function registrar(userData: RegisterData) {
 
 export async function getLojas(): Promise<LojaData[]> {
   const res = await fetch(`${API_URL}/lojas`, { headers: getAuthHeaders() });
-  if (!res.ok) throw new Error('Erro ao buscar lista de lojas');
+  
+  if (!res.ok) {
+    // Lê o texto de erro enviado pelo backend
+    const errorDetails = await res.text(); 
+    console.error("Status:", res.status, "Detalhes:", errorDetails);
+    throw new Error(`Erro ao buscar lista de lojas. Status: ${res.status}`);
+  }
+  
   return res.json();
 }
-
 // ==========================================
 // 📊 MÓDULO: ANALYTICS (DASHBOARD)
 // ==========================================
