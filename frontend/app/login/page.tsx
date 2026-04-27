@@ -10,7 +10,6 @@ import { Loader2, LockKeyhole, UserPlus } from "lucide-react";
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  // ✅ Variável de estado que controla se estamos na aba de "Entrar" ou "Criar Conta"
   const [isRegisterMode, setIsRegisterMode] = useState(false); 
   const router = useRouter();
 
@@ -46,8 +45,8 @@ export default function LoginPage() {
         // 🚀 FLUXO 2: LOGIN NORMAL
         const data = await login(formData);
         
-        localStorage.setItem("token", data.access_token);
-        localStorage.setItem("user_name", data.nome);
+        localStorage.setItem('token', data.access_token); 
+        localStorage.setItem('user_name', data.nome);
         router.push("/dashboard"); 
       }
     } catch (err: unknown) {

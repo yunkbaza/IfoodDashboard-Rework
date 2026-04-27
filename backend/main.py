@@ -42,9 +42,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://ifood-dashboard-rework.vercel.app",
-        "http://localhost:3000",
-        "http://localhost:8000"
-    ],
+        "http://localhost:3000"
+    ], 
     allow_credentials=True,
     allow_methods=["*"], 
     allow_headers=["*"], 
