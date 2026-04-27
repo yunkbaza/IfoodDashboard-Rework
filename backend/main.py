@@ -370,5 +370,18 @@ def analisar_feedbacks_ia(request: FeedbackRequest, token: str = Depends(oauth2_
     except Exception as e:
         return [{"tipo": "AlertTriangle", "titulo": "Erro Crítico", "reclamacao": str(e), "dica": "Verifique o servidor"}]
 
+# ==========================================
+# 🛠️ ROTA DE EMERGÊNCIA (REMOVER DEPOIS)
+# ==========================================
+@app.get("/api/admin/reset-db")
+def resetar_banco():
+    print("Iniciando reset do banco de dados...")
+    os.system("python reset_db.py")
+    
+    print("Populando o banco com novos dados...")
+    os.system("python popular_banco.py")
+    
+    return {"mensagem": "Banco de dados recriado e populado com sucesso (Multi-lojas ativado)!"}
+
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
